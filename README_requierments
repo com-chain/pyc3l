@@ -1,0 +1,9 @@
+use python3 
+
+
+pip install eth_account
+pip3 install web3
+
+check that tkinter is installed: open python3 and type:
+>>> import tkinter
+>>> tkinter._test()
