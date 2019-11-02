@@ -14,6 +14,8 @@ class ApiCommunication:
         self._server = server
         self._contract = self._api_handler.getServerContract(self._server)
         self._end_point = self._api_handler.getApiEndpoint()
+        self._current_block=''
+        self._additional_nonce=0
         
         # Functions
         # Consultation
@@ -54,12 +56,21 @@ class ApiCommunication:
         return int(hexnumber,0)+res
         
         
+    def encodeAddressForTransaction(self, address):
+        full_address = address
+        if full_address.startswith('0x'):
+            full_address = full_address[2:]
+        if len(full_address)!=40:
+            
+            raise Exception('Missformed wallet address: '+address)
+        
+        return full_address.zfill(64)   
     def buildInfoData(self, function, address):
         if address.startswith('0x'):
             address=address[2:]
-        if function.startswith('0x'):
-            function=function[2:]
-        return '0x'+function+address.zfill(72-len(function))
+        if not function.startswith('0x'):
+            function='0x'+function
+        return function + address.zfill(64)
         
         
     def callNumericInfo(self, api, contract, function, address, divider=100.):
@@ -73,30 +84,91 @@ class ApiCommunication:
             return self.decodeNumber(response_parsed['data'])/divider
         else:
             return -1
-        
-    def getNumericalInfo(self, address_to_check, function, api_end_point="", server="", contract="", divider=100.):
-        if len(api_end_point)!=0:
-            self._end_point = api_end_point;
             
+    def resetApis(self, api_end_point="", server="", contract="", use_new=False):
+    
+        # get the contract
         if len(server)>0:
-            self._server = server 
+            self._server = server
             self._contract = self._api_handler.getServerContract(self._server)
         
         if len(contract)>0:
-            self._contract =contract
-        
+            self._contract = contract
+            
+        # get the endpoint 
+        if len(api_end_point)!=0:
+            self._end_point = api_end_point;
+        elif use_new:
+            self._end_point = self._api_handler.getApiEndpoint()
+            
+            
+          
+    def getNumericalInfo(self, address_to_check, function, api_end_point="", server="", contract="", divider=100.):
+        self.resetApis(api_end_point=api_end_point, server=server, contract=contract, use_new=False)
         return self.callNumericInfo(self._end_point, self._contract, function, address_to_check, divider)  
         
+
         
     def getTrInfos(self, address, api_end_point=""):
         if len(api_end_point)!=0:
-            self._end_point = api_end_point; 
+            self._end_point = api_end_point;
+             
         data = {'txdata':address}
         
         r = requests.post(url = self._end_point, data = data)
         response_parsed = json.loads(r.text)
         return response_parsed['data']
         
+       
+        
+    def checkAdmin(self, admin_address):
+        if not self.getAccountIsValidAdmin(admin_address):
+            raise Exception("The provided Admin Account with address "+admin_address+" is not an active admin on server "+self._server + " (" + self._contract+")")
+        
+        if not self.getAccountHasEnoughGas(admin_address):
+            raise Exception("The provided Admin Account with address "+admin_address+" has not enough gas.")
+
+    def hasChangedBlock(self,do_reset=False, endpoint=''):
+        new_current_block = self._api_handler.getCurrentBlock(endpoint)
+        res = new_current_block != self._current_block
+        if (do_reset):
+            self._current_block = new_current_block
+        return res; 
+        
+    def registerCurrentBlock(self,  endpoint=''):
+        self.hasChangedBlock(do_reset=True, endpoint=endpoint)
+            
+    def updateNonce(self, nonce):
+        if not self.hasChangedBlock(do_reset=True):
+            self._additional_nonce= self._additional_nonce + 1
+            return nonce+self._additional_nonce
+        else:
+            self._additional_nonce = 0
+            return nonce 
+
+    def sendTransaction(self, data, admin_account):
+        tr_infos = self.getTrInfos(admin_account.address)
+
+        transaction = {
+            'to': self._contract,
+            'value': 0,
+            'gas': 5000000,
+            'gasPrice':  int(tr_infos['gasprice'],0),
+            'nonce': self.updateNonce(int(tr_infos['nonce'],0)),
+            'data':data,
+            'from':admin_account.address
+        }
+    
+        signed = Eth.account.signTransaction(transaction, admin_account.privateKey)
+        str_version = '0x'+str(codecs.getencoder('hex_codec')(signed.rawTransaction)[0])[2:-1]
+        raw_tx = {'rawtx': str_version}
+
+        r = requests.post(url = self._end_point, data = raw_tx)
+        if r.status_code!=200: 
+            raise Exception("Error while contacting the API:"+str(r.status_code))
+        response_parsed = json.loads(r.text)
+        return response_parsed['data'], r
+    
     ############################### High level Functions    
         
     def getAccountType(self, address_to_check, api_end_point="", server="", contract=""):
@@ -133,34 +205,24 @@ class ApiCommunication:
           
     ############################### High level Transactions     
     def lockUnlockAccount(self, admin_account, address, lock=True, server="", contract=""):
-        # get the contract
-        if len(server)>0:
-            self._server = server
-            self._contract = self._api_handler.getServerContract(self._server)
-        
-        if len(contract)>0:
-            self._contract = contract
-            
-        # get the endpoint 
-        self._end_point = self._api_handler.getApiEndpoint()
-        
+        # setup the endpoint
+        self.resetApis(server=server, contract=contract, use_new=True)       
 
         # Check the admin
-        if not self.getAccountIsValidAdmin(admin_account.address):
-            raise Exception("The provided Admin Account with address "+admin_account.address+" is not an active admin on server "+self._server + " (" + self._contract+")")
-        
-        if not self.getAccountHasEnoughGas(admin_account.address):
-            raise Exception("The provided Admin Account with address "+admin_account.address+" has not enough gas.")
-
+        self.checkAdmin(admin_account.address)
 
         # Get wallet infos
         status = self.getAccountStatus(address)
         
         if lock and status == 0:
             print("INFO >ComChain::ApiCommunication > The wallet " + address+ " is already locked")
+            return "", {"text":"N.A."} # TODO return in a format that accept r.text
         elif not lock and status == 1:
             print("INFO >ComChain::ApiCommunication > The wallet " + address+ " is already unlocked")
+            return "", {"text":"N.A."} # TODO return in a format that accept r.text
         else:
+        
+           # Get wallet infos
             acc_type = self.getAccountType(address)
             lim_m = self.getAccountCMLimitMinimum(address)
             lim_p = self.getAccountCMLimitMaximum(address)
@@ -168,92 +230,33 @@ class ApiCommunication:
             status = 1
             if lock:
                 status=0
-            data = address
-            if data.startswith('0x'):
-                data = data[2:]
+           
+            # prepare the data
+            data = self.encodeAddressForTransaction(address)
             data += self.encodeNumber(status) + self.encodeNumber(acc_type) + self.encodeNumber(int(lim_p*100)) + self.encodeNumber(int(lim_m*100))
             
-            tr_infos = self.getTrInfos(admin_account.address)
-            
-            transaction = {
-                
-                'to': contract,
-                'value': 0,
-                'gas': 5000000,
-                'gasPrice':  int(tr_infos['gasprice'],0),
-                'nonce': int(tr_infos['nonce'],0),
-                'data':self.ACCOUNT_PARAM + data,
-                'from':admin_account.address
-
-            }
-            signed = Eth.account.signTransaction(transaction, admin_account.privateKey)
-            str_version = '0x'+str(codecs.getencoder('hex_codec')(signed.rawTransaction)[0])[2:-1]
-            raw_tx = {'rawtx': str_version}
+            # send the transaction
             print("INFO >ComChain::ApiCommunication > Locking/unlocking the wallet " + address+ " on server "+self._server + " (" + self._contract+")")
-            r = requests.post(url = self._end_point, data = raw_tx)
-            if r.status_code!=200: 
-                raise Exception("Error while contacting the API:"+str(r.status_code))
-            response_parsed = json.loads(r.text)
-            return response_parsed['data'], r
+            return self.sendTransaction(self.ACCOUNT_PARAM + data, admin_account)
                        
-    def pledgeAccount(self, admin_account, address, amount, unlock_if_locked=False, server="", contract=""):
-         # get the contract
-
-        if len(server)>0:
-            self._server = server
-            self._contract = self._api_handler.getServerContract(self._server)
-        
-        if len(contract)>0:
-            self._contract = contract
-            
-        # get the endpoint 
-        self._end_point = self._api_handler.getApiEndpoint()
-        
+    def pledgeAccount(self, admin_account, address, amount, server="", contract=""):
+        # setup the endpoint
+        self.resetApis(server=server, contract=contract, use_new=True)
         
         # Check the admin
-        if not self.getAccountIsValidAdmin(admin_account.address):
-            raise Exception("The provided Admin Account with address "+admin_account.address+" is not an active admin on server "+self._server + " (" + self._contract+")")
-        
-        if not self.getAccountHasEnoughGas(admin_account.address):
-            raise Exception("The provided Admin Account with address "+admin_account.address+" has not enough gas.")
-
+        self.checkAdmin(admin_account.address)
 
         # Get wallet infos
         status = self.getAccountStatus(address)
-        
         if status==0:
             print("WARN >ComChain::ApiCommunication > The target wallet " + address+ " is locked on server "+self._server + " (" + self._contract+")")
-            if unlock_if_locked:
-                print("INFO >ComChain::ApiCommunication > Unlocking the target wallet " + address+ ".")
-                lockUnlockAccount(admin_account, address, lock=False)
-            else:
-                raise Exception("A locked account cannot be pledged")
-        print("INFO >ComChain::ApiCommunication > Pledging "+amount+" to target wallet " + address+ " on server "+self._server + " (" + self._contract+")")
+        
+        # Prepare data    
         amount_cent = int(100*amount)
-        data = address
-        if data.startswith('0x'):
-            data = data[2:]
+        data = self.encodeAddressForTransaction(address)
         data += self.encodeNumber(amount_cent)
 
-        tr_infos = self.getTrInfos(self._end_point, admin_account.address)
-
-        transaction = {
-
-            'to': contract,
-            'value': 0,
-            'gas': 5000000,
-            'gasPrice':  int(tr_infos['gasprice'],0),
-            'nonce': int(tr_infos['nonce'],0),
-            'data':self.PLEDGE + data,
-            'from':admin_account.address
-
-        }
-        signed = Eth.account.signTransaction(transaction, admin_account.privateKey)
-        str_version = '0x'+str(codecs.getencoder('hex_codec')(signed.rawTransaction)[0])[2:-1]
-        raw_tx = {'rawtx': str_version}
-        r = requests.post(url = api_end_point, data = raw_tx)
-        if r.status_code!=200: 
-            raise Exception("Error while contacting the API:"+str(r.status_code))
-        response_parsed = json.loads(r.text)
-        return response_parsed['data'], r
+        # send transaction
+        print("INFO >ComChain::ApiCommunication > Pledging "+str(amount)+" to target wallet " + address+ " on server "+self._server + " (" + self._contract+")")
+        return self.sendTransaction(self.PLEDGE + data, admin_account)
                                

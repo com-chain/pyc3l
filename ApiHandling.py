@@ -78,7 +78,12 @@ class ApiHandling:
         if not found:
             raise Exception("Unable to find a valid ipfs node after "+str(nb_try)+" Try.")   
             
-            
+    def getCurrentBlock(self, endpoint=''):
+        if len(endpoint)==0:
+            endpoint = self.getApiEndpoint()
+        r = requests.get(url = endpoint+'?_='+str(datetime.datetime.now()))
+        return r.text
+              
     def getApiEndpoint(self):
         end_point_list = self.getNodeRepo();
         nb_try=0
