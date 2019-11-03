@@ -1,0 +1,18 @@
+Requierement:
+
+ - python3 
+
+ - eth_account 
+ - web3 
+ 
+ - tkinter
+ 
+You can check if tkinter is installed: open python3 and type:
+>>> import tkinter
+>>> tkinter._test()
+
+
+
+Testing: 
+run 
+python3 -m unittest PythonClient.test.test_ApiCommunication
