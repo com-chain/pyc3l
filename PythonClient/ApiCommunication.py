@@ -206,7 +206,80 @@ class ApiCommunication:
         return self.getNumericalInfo(address_to_check, self.ACCOUNT_CM_LIMIT_M, api_end_point=api_end_point, server=server, contract=contract)
         
           
-    ############################### High level Transactions     
+    ############################### High level Transactions
+    def transfertNant(self, sender_account, dest_address, amount, server="", contract=""):
+        """Transfert Nantissed current Currency (server) from the sender to the destination wallet
+
+        Parameters:
+        sender_account (eth_account import::Account): An account with enough balance on the current server. Will sign the transaction
+        dest_address (string): The public address of the wallet to be credited (0x12345... format)
+        amount (double): amount (in the current Currency) to be transfered from the sender wallet to the destination wallet
+       
+       """
+        # setup the endpoint
+        self.resetApis(server=server, contract=contract, use_new=True)
+        
+         # Get sender wallet infos
+        status = self.getAccountStatus(sender_account.address)
+        if status==0:
+            raise Exception("The sender wallet " + sender_account.address+ " is locked on server "+self._server + " (" + self._contract+") and therefore cannot initiate a transfer.")
+            
+        balance = self.getAccountNantBalance(sender_account.address) 
+        if balance<amount:
+             raise Exception("The sender wallet " + sender_account.address+ " has an insuficient Nant balance on server "+self._server + " (" + self._contract+") to complete this transfer.")
+        
+        # Get destination wallet infos
+        status = self.getAccountStatus(dest_address)
+        if status==0:
+            raise Exception("The destination wallet " + dest_address+ " is locked on server "+self._server + " (" + self._contract+") and therefore cannot recieve a transfer.")
+        
+        # Prepare data    
+        amount_cent = int(100*amount)
+        data = self.encodeAddressForTransaction(dest_address)
+        data += self.encodeNumber(amount_cent)
+
+        # send transaction
+        print("INFO >ComChain::ApiCommunication > Transferring "+str(amount)+" nantissed "+self._server + " from wallet "+sender_account.address+" to target wallet " + dest_address+ " on server "+self._server + " (" + self._contract+")")
+        return self.sendTransaction(self.NANT_TRANSFERT + data, sender_account)
+
+    
+    def transfertCM(self, sender_account, dest_address, amount, server="", contract=""):
+        """Transfert Mutual Credit current Currency (server) from the sender to the destination wallet
+
+        Parameters:
+        sender_account (eth_account import::Account): An account with enough balance on the current server. Will sign the transaction
+        dest_address (string): The public address of the wallet to be credited (0x12345... format)
+        amount (double): amount (in the current Currency) to be transfered from the sender wallet to the destination wallet
+       
+       """
+        # setup the endpoint
+        self.resetApis(server=server, contract=contract, use_new=True)
+        
+         # Get sender wallet infos
+        status = self.getAccountStatus(sender_account.address)
+        if status==0:
+            raise Exception("The sender wallet " + sender_account.address+ " is locked on server "+self._server + " (" + self._contract+") and therefore cannot initiate a transfer.")
+            
+        balance = self.getAccountCMBalance(sender_account.address) 
+        if balance<amount:
+             raise Exception("The sender wallet " + sender_account.address+ " has an insuficient CM balance on server "+self._server + " (" + self._contract+") to complete this transfer.")
+        
+        # Get destination wallet infos
+        status = self.getAccountStatus(dest_address)
+        if status==0:
+            raise Exception("The destination wallet " + dest_address+ " is locked on server "+self._server + " (" + self._contract+") and therefore cannot recieve a transfer.")
+        
+        # Prepare data    
+        amount_cent = int(100*amount)
+        data = self.encodeAddressForTransaction(dest_address)
+        data += self.encodeNumber(amount_cent)
+
+        # send transaction
+        print("INFO >ComChain::ApiCommunication > Transferring "+str(amount)+" mutual credit "+self._server + " from wallet "+sender_account.address+" to target wallet " + dest_address+ " on server "+self._server + " (" + self._contract+")")
+        return self.sendTransaction(self.CM_TRANSFERT + data, sender_account)
+                                                                                 
+ 
+    ############################### High level Admin restricted Transactions        
     def lockUnlockAccount(self, admin_account, address, lock=True, server="", contract=""):
         """Lock or unlock an Wallet on the current Currency (server)
 
@@ -279,73 +352,4 @@ class ApiCommunication:
         print("INFO >ComChain::ApiCommunication > Pledging "+str(amount)+" to target wallet " + address+ " on server "+self._server + " (" + self._contract+")")
         return self.sendTransaction(self.PLEDGE + data, admin_account)
                      
-def transfertNant(self, sender_account, dest_address, amount, server="", contract=""):
-        """Transfert Nantissed current Currency (server) from the sender to the destination wallet
 
-        Parameters:
-        sender_account (eth_account import::Account): An account with enough balance on the current server. Will sign the transaction
-        dest_address (string): The public address of the wallet to be credited (0x12345... format)
-        amount (double): amount (in the current Currency) to be transfered from the sender wallet to the destination wallet
-       
-       """
-        # setup the endpoint
-        self.resetApis(server=server, contract=contract, use_new=True)
-        
-         # Get sender wallet infos
-        status = self.getAccountStatus(sender_account.address)
-        if status==0:
-            raise Exception("The sender wallet " + sender_account.address+ " is locked on server "+self._server + " (" + self._contract+") and therefore cannot initiate a transfer.")
-            
-        balance = self.getAccountNantBalance(sender_account.address) 
-        if balance<amount:
-             raise Exception("The sender wallet " + sender_account.address+ " has an insuficient Nant balance on server "+self._server + " (" + self._contract+") to complete this transfer.")
-        
-        # Get destination wallet infos
-        status = self.getAccountStatus(dest_address)
-        if status==0:
-            raise Exception("The destination wallet " + dest_address+ " is locked on server "+self._server + " (" + self._contract+") and therefore cannot recieve a transfer.")
-        
-        # Prepare data    
-        amount_cent = int(100*amount)
-        data = self.encodeAddressForTransaction(address)
-        data += self.encodeNumber(amount_cent)
-
-        # send transaction
-        print("INFO >ComChain::ApiCommunication > Transferring "+str(amount)+" nantissed "+self._server + " from wallet "+sender_account.address+" to target wallet " + address+ " on server "+self._server + " (" + self._contract+")")
-        return self.sendTransaction(self.NANT_TRANSFERT + data, admin_account)
-
-def transfertCM(self, sender_account, dest_address, amount, server="", contract=""):
-        """Transfert Mutual Credit current Currency (server) from the sender to the destination wallet
-
-        Parameters:
-        sender_account (eth_account import::Account): An account with enough balance on the current server. Will sign the transaction
-        dest_address (string): The public address of the wallet to be credited (0x12345... format)
-        amount (double): amount (in the current Currency) to be transfered from the sender wallet to the destination wallet
-       
-       """
-        # setup the endpoint
-        self.resetApis(server=server, contract=contract, use_new=True)
-        
-         # Get sender wallet infos
-        status = self.getAccountStatus(sender_account.address)
-        if status==0:
-            raise Exception("The sender wallet " + sender_account.address+ " is locked on server "+self._server + " (" + self._contract+") and therefore cannot initiate a transfer.")
-            
-        balance = self.getAccountCMBalance(sender_account.address) 
-        if balance<amount:
-             raise Exception("The sender wallet " + sender_account.address+ " has an insuficient CM balance on server "+self._server + " (" + self._contract+") to complete this transfer.")
-        
-        # Get destination wallet infos
-        status = self.getAccountStatus(dest_address)
-        if status==0:
-            raise Exception("The destination wallet " + dest_address+ " is locked on server "+self._server + " (" + self._contract+") and therefore cannot recieve a transfer.")
-        
-        # Prepare data    
-        amount_cent = int(100*amount)
-        data = self.encodeAddressForTransaction(address)
-        data += self.encodeNumber(amount_cent)
-
-        # send transaction
-        print("INFO >ComChain::ApiCommunication > Transferring "+str(amount)+" mutual credit "+self._server + " from wallet "+sender_account.address+" to target wallet " + address+ " on server "+self._server + " (" + self._contract+")")
-        return self.sendTransaction(self.CM_TRANSFERT + data, admin_account)
-                                                                                 
