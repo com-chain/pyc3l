@@ -1,3 +1,6 @@
+This project allow to create python scripts comunicating with the ComChain API. Its goal is to offer a toolkit for automated batch process which are length on Biletujo client.
+
+
 Requierement:
 
  - python3 
