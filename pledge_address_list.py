@@ -53,8 +53,8 @@ def main():
         print(' - done with '+public)
         
         # Wite the next block
-        while not api_com.hasChangedBlock()
-        time.sleep( 5 )
+        while not api_com.hasChangedBlock():
+            time.sleep( 5 )
 
     print('------------- END PROCESSING ------------------------')
 main()
