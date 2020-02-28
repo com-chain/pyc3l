@@ -22,7 +22,7 @@ api_com = ApiCommunication(api_handling, server)
 print('The sender wallet '+sender_account.address+', on server '+server+' has a balance of = '+str(api_com.getAccountGlobalBalance(sender_account.address)))
 
 
-res, r = api_com.transfertNant(sender_account, target_address, 0.01)
+res, r = api_com.transfertNant(sender_account, target_address, 0.01, message_from="test", message_to="test")
 print(res)
 print(r.text)
 print("")

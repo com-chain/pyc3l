@@ -1,4 +1,5 @@
 from .ApiHandling import ApiHandling 
+from .CryptoAsim import EncryptMessage, DecryptMessage 
 import requests 
 import json
 from eth_account import Account
@@ -19,6 +20,8 @@ class ApiCommunication:
         self._end_point = self._api_handler.getApiEndpoint()
         self._current_block=''
         self._additional_nonce=0
+        
+        self.KEYSTORE = "/keys.php"
         
         # Functions
         # Consultation
@@ -149,7 +152,7 @@ class ApiCommunication:
             self._additional_nonce = 0
             return nonce 
 
-    def sendTransaction(self, data, admin_account):
+    def sendTransaction(self, data, admin_account, ciphered_message_from="", ciphered_message_to=""):
         tr_infos = self.getTrInfos(admin_account.address)
 
         transaction = {
@@ -165,12 +168,65 @@ class ApiCommunication:
         signed = Eth.account.signTransaction(transaction, admin_account.privateKey)
         str_version = '0x'+str(codecs.getencoder('hex_codec')(signed.rawTransaction)[0])[2:-1]
         raw_tx = {'rawtx': str_version}
-
+        
+        if ciphered_message_from!="":
+            raw_tx["memo_from"] = ciphered_message_from
+            
+        if ciphered_message_to!="":
+            raw_tx["memo_to"] = ciphered_message_to
+        
         r = requests.post(url = self._end_point, data = raw_tx)
         if r.status_code!=200: 
             raise Exception("Error while contacting the API:"+str(r.status_code))
         response_parsed = json.loads(r.text)
         return response_parsed['data'], r
+        
+        
+    ############################### messages with transaction handling
+    def getMessageKeys(self, address, with_private):
+        query_string = '?addr=' + address
+        if with_private:
+           query_string = query_string + "&private=1" 
+        
+        url = self._end_point[:-len(self._api_handler.api_url)] +  self.KEYSTORE + query_string
+        r = requests.get(url = url)
+        if r.status_code!=200: 
+            raise Exception("Error while contacting the API:"+str(r.status_code))
+        response_parsed = json.loads(r.text) 
+        return response_parsed, r
+        
+        
+    def encryptTransactionMessage(self, plain_text, **kwargs ): # if public_message_key is present use it if not get the key from the address
+        if "public_message_key" in kwargs:
+            public_message_key = kwargs["public_message_key"]
+        elif "address" in kwargs:
+            response,r = self.getMessageKeys(kwargs["address"], False)
+            if not "public_message_key" in response:
+                print("WARNIN : No message key for account " + kwargs["address"])
+                return "",""
+            public_message_key = response["public_message_key"]
+        else:
+            raise ValueError("public_message_key or address agrgument must be present")
+            
+        ciphered = EncryptMessage(public_message_key, plain_text)
+        return ciphered, public_message_key
+        
+        
+    def decrypteTransactionMessage(self, ciphered, **kwargs ): # if private_message_key is present use it if not get the key from the address and private_key
+        if "private_message_key" in kwargs:
+            private_message_key = kwargs["private_message_key"]
+        elif "address" in kwargs and "private_key" in kwargs:
+            response,r = self.getMessageKeys(kwargs["address"], True)
+            if not "private_message_key" in response:
+                print("WARNIN : No message key for account " + kwargs["address"])
+                return "",""
+            private_message_key = DecryptMessage(kwargs["private_key"], response["private_message_key"])
+           
+        else:
+            raise ValueError("private_message_key or ( address and private_key ) agrgument must be present")
+            
+        plain_text = DecryptMessage(private_message_key, ciphered)
+        return plain_text, private_message_key
     
     ############################### High level Functions    
         
@@ -207,7 +263,7 @@ class ApiCommunication:
         
           
     ############################### High level Transactions
-    def transfertNant(self, sender_account, dest_address, amount, server="", contract=""):
+    def transfertNant(self, sender_account, dest_address, amount,  **kwargs): #server="", contract="", message_from="", message_to=""):
         """Transfert Nantissed current Currency (server) from the sender to the destination wallet
 
         Parameters:
@@ -217,7 +273,28 @@ class ApiCommunication:
        
        """
         # setup the endpoint
+        server = ""
+        if "server" in kwargs:
+            server = kwargs["server"]
+             
+        contract = ""
+        if "contract" in kwargs:
+            contract = kwargs["contract"]
+            
         self.resetApis(server=server, contract=contract, use_new=True)
+        
+        
+        # prepare messages
+        if "message_from" in kwargs and kwargs["message_from"]!="":
+            
+            ciphered_message_from = self.encryptTransactionMessage(kwargs["message_from"], address=sender_account.address)
+        else:
+            ciphered_message_from = "" 
+             
+        if "message_to" in kwargs and kwargs["message_to"]!="":
+            ciphered_message_to = self.encryptTransactionMessage(kwargs["message_to"], address=dest_address)
+        else:
+            ciphered_message_to = ""    
         
          # Get sender wallet infos
         status = self.getAccountStatus(sender_account.address)
@@ -240,10 +317,10 @@ class ApiCommunication:
 
         # send transaction
         print("INFO >ComChain::ApiCommunication > Transferring "+str(amount)+" nantissed "+self._server + " from wallet "+sender_account.address+" to target wallet " + dest_address+ " on server "+self._server + " (" + self._contract+")")
-        return self.sendTransaction(self.NANT_TRANSFERT + data, sender_account)
+        return self.sendTransaction(self.NANT_TRANSFERT + data, sender_account, ciphered_message_from, ciphered_message_to)
 
     
-    def transfertCM(self, sender_account, dest_address, amount, server="", contract=""):
+    def transfertCM(self, sender_account, dest_address, amount,  **kwargs): #server="", contract="", message_from="", message_to=""):
         """Transfert Mutual Credit current Currency (server) from the sender to the destination wallet
 
         Parameters:
@@ -253,7 +330,29 @@ class ApiCommunication:
        
        """
         # setup the endpoint
+        server = ""
+        if "server" in kwargs:
+            server = kwargs["server"]
+             
+        contract = ""
+        if "contract" in kwargs:
+            contract = kwargs["contract"]
+            
         self.resetApis(server=server, contract=contract, use_new=True)
+        
+        
+        # prepare messages
+        if "message_from" in kwargs and kwargs["message_from"]!="":
+            ciphered_message_from = self.encryptTransactionMessage(kwargs["message_from"], address=sender_account.address)
+        else:
+            ciphered_message_from = "" 
+             
+        if "message_to" in kwargs and kwargs["message_to"]!="":
+            ciphered_message_to = self.encryptTransactionMessage(kwargs["message_to"], address=dest_address)
+        else:
+            ciphered_message_to = ""    
+        
+        
         
          # Get sender wallet infos
         status = self.getAccountStatus(sender_account.address)
@@ -276,7 +375,7 @@ class ApiCommunication:
 
         # send transaction
         print("INFO >ComChain::ApiCommunication > Transferring "+str(amount)+" mutual credit "+self._server + " from wallet "+sender_account.address+" to target wallet " + dest_address+ " on server "+self._server + " (" + self._contract+")")
-        return self.sendTransaction(self.CM_TRANSFERT + data, sender_account)
+        return self.sendTransaction(self.CM_TRANSFERT + data, sender_account, ciphered_message_from, ciphered_message_to)
                                                                                  
  
     ############################### High level Admin restricted Transactions        
