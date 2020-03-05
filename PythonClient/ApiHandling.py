@@ -111,4 +111,4 @@ class ApiHandling:
         if r.status_code!=200: 
             raise Exception("Unknow server "+server_name)
         response_parsed = json.loads(r.text)
-        return response_parsed['server']['contract_1']                         
+        return response_parsed['server']['contract_1'], response_parsed['server']['contract_2']                         
