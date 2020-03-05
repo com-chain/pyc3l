@@ -1,3 +1,5 @@
+
+from Crypto import Random
 from Crypto.Cipher import AES
 from Crypto.Hash import SHA256, SHA512
 from ecdsa import SigningKey, SECP256k1, ECDH, VerifyingKey
