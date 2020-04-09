@@ -100,7 +100,13 @@ class ApiCommunication:
         elif use_new:
             self._end_point = self._api_handler.getApiEndpoint()
             
-            
+    
+    def getBlockNumber(self):
+        r = requests.post(url = self._end_point)
+        if r.status_code!=200: 
+            raise Exception("Error while contacting the API("+ self._end_point+"):"+str(r.status_code))
+        return r.text
+                
           
     def getNumericalInfo(self, address_to_check, function, api_end_point="",divider=100., contract_id=1):
         self.resetApis(api_end_point=api_end_point, use_new=False)
