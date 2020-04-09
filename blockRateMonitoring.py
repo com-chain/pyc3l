@@ -37,6 +37,7 @@ for counter in range(number):
         dt.append(sec)
         start_block = curr_block
         start_time = curr_time 
+        print('New block after '+str(sec)+' s')
     time.sleep(step)
     
 # output result
