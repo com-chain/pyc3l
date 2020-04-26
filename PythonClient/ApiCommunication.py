@@ -106,6 +106,17 @@ class ApiCommunication:
         if r.status_code!=200: 
             raise Exception("Error while contacting the API("+ self._end_point+"):"+str(r.status_code))
         return r.text
+        
+    def getTransactionBLock(self, transaction_hash, api_end_point=""):
+        if len(api_end_point)!=0:
+            self._end_point = api_end_point;
+             
+        data = {'hash':transaction_hash}
+        
+        r = requests.post(url = self._end_point, data = data)
+        response_parsed = json.loads(r.text)
+        return response_parsed['transaction']['blockNumber']
+        
                 
           
     def getNumericalInfo(self, address_to_check, function, api_end_point="",divider=100., contract_id=1):
