@@ -1,3 +1,6 @@
+#!/usr/local/bin/python
+# coding: utf-8
+
 from PythonClient.LocalAccountOpener import LocalAccountOpener
 from PythonClient.ApiHandling import ApiHandling
 from PythonClient.ApiCommunication import ApiCommunication
@@ -82,6 +85,8 @@ def getCsvFile(csv_file):
     if len(csv_file)==0:
             tk().withdraw()
             return filedialog.askopenfilename(title = 'Choose a CSV File')
+    else:
+        return csv_file
 
 
 
@@ -120,7 +125,7 @@ CM_limit=api_com.getAccountCMLimitMinimum(sender_account.address)
 Nant_balance = api_com.getAccountNantBalance(sender_account.address)
 Sender_status = api_com.getAccountStatus(sender_account.address)
 
-if Sender_status==1:
+if Sender_status!=1:
     print("Error: The Sender Wallet is locked!")
     sys.exit()
 
@@ -185,7 +190,7 @@ if not input('Ready to send the payments: do you want to proceed? (y/n)')=='y':
 ################################################################################
 ##     (4) Execute transactions
 ################################################################################
-transaction_hash=[]
+transaction_hash={}
 for tran in prepared_transactions:
     if tran['unlocked']==1 and tran['type']=='N':
         res, r = api_com.transfertNant(sender_account, tran['add'], tran['amount'], message_from=tran['m_from'], message_to=tran['m_to'])
@@ -200,16 +205,18 @@ for tran in prepared_transactions:
     else :
         print("Transaction to "+tran['add'] + " skipped")
 
+print("All transaction have been send, bye!")
+
 ################################################################################
 ##     (5) Wait for confirmation
 ################################################################################
+#
+#while len(transaction_hash)>0:
+#    hash_to_test = list(transaction_hash.keys())[0] 
+#    if api_com.getTransactionBLock(hash_to_test)!=None:
+#        print("Transaction to "+transaction_hash[hash_to_test] + " has been mined")
+#    else:
+#        time.sleep( 15 ) 
 
-while len(transaction_hash)>0:
-    hash_to_test = list(transaction_hash.keys())[0] 
-    if api_com.getTransactionBLock(hash_to_test)!=None:
-        print("Transaction to "+transaction_hash[hash_to_test] + " has been mined")
-    else:
-        time.sleep( 15 ) 
-
-print("All transaction have been mined, bye!")
+#print("All transaction have been mined, bye!")
 
