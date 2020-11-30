@@ -14,7 +14,7 @@ from tkinter import filedialog
 ## Parametrization
 ###############################################################################
 ## CSV File containing the transactions (if '' a file selector is open)
-csv_file = 'List_nant.csv'
+csv_file = 'list_nant.csv'
 ## Columns in the CSV file
 address_column='Address'
 amount_column='Montant'
@@ -149,7 +149,7 @@ for tran in prepared_transactions:
     if tran['unlocked']==1:
         res, r = api_com.pledgeAccount(sender_account, tran['add'], tran['amount']) 
         transaction_hash[res]=tran['add']
-        print("Transaction Nant sent to "+tran['add'])
+        print("Transaction Nant sent to "+tran['add'] + ' ('+str(tran['amount'])+'LEM) Transaction Hash='+ res)
         
         time.sleep( 30 ) # Delay for not overloading the BlockChain
     
