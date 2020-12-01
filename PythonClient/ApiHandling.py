@@ -95,6 +95,7 @@ class ApiHandling:
                 r = requests.get(url = end_point_list[index]+self.api_url+'?_='+str(datetime.datetime.now()))
                 if r.status_code==200:
                     found=True
+                    print('INFO >Selected end-point: ' + end_point_list[index])
                     return end_point_list[index]+self.api_url
                 else:
                     print('WARN >ComChain::ApiHandling > ' + end_point_list[index]+self.api_url+' return status '+str(r.status_code))

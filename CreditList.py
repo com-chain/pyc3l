@@ -103,18 +103,22 @@ if not input('Continue to the execution (y/n)')=='y':
 ################################################################################
 
 # Load the API
+print('INFO: Load the API.')
 api_handling = ApiHandling()
 
 # refresh the node list
+print('INFO: refresh the node list.')
 api_handling.updateNodeRepo()
 
 account_opener = LocalAccountOpener()
 server, sender_account = account_opener.openAccountInteractively('Select Admin Wallet',account_file=account_file, password=password)
 
 #load the high level functions
+print('INFO: load the high level functions.')
 api_com = ApiCommunication(api_handling, server)
 
 
+print('INFO: Check the provided account to have admin role.')
 api_com.checkAdmin(sender_account.address)
 Sender_status = api_com.getAccountStatus(sender_account.address)
 
@@ -129,6 +133,7 @@ if Sender_status!=1:
 ##     (3) Check target accounts are available
 ################################################################################
 
+print('INFO: Check the targets accounts are not locked.')
 for tran in prepared_transactions:
     target_address = tran['add']
     
@@ -138,7 +143,7 @@ for tran in prepared_transactions:
     else:
         tran['unlocked']=1
            
-if not input('Ready to send the nantissement: do you want to proceed? (y/n)')=='y':
+if not input('Ready to send the nantissement on '+server+': do you want to proceed? (y/n)')=='y':
     sys.exit()
     
 ################################################################################

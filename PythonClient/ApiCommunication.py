@@ -455,7 +455,7 @@ class ApiCommunication:
         data += self.encodeNumber(amount_cent)
 
         # send transaction
-        print("INFO >ComChain::ApiCommunication > Pledging "+str(amount)+" to target wallet " + address+ " on server "+self._server + " (" + self._contract_1+")")
+        print("INFO >ComChain::ApiCommunication > Pledging "+str(amount)+" to target wallet " + address+ " on server "+self._server + " (" + self._contract_1+") through end-point " + self._end_point)
         return self.sendTransaction(self.PLEDGE + data, admin_account)
                      
 
