@@ -10,7 +10,7 @@ class ApiHandling:
         self.endpoint_file = endpoint_file
         self.default_enpoints = ['https://node-cc-001.cchosting.org', 'https://node-001.cchosting.org', 'https://node-002.cchosting.org', 'https://node-003.cchosting.org', 'https://node-004.cchosting.org']
         self.ipfs_config_url = '/ipns/QmaAAZor2uLKnrzGCwyXTSwogJqmPjJgvpYgpmtz5XcSmR/configs/'
-        self.ipfs_node_list_url = '/ipns/Qmb2paHChFzvU9fnDtAvmpbEcwyKfpKjaHc67j4GCmWLZv'
+        self.ipfs_node_list_url = '/ipns/QmcRWARTpuEf9E87cdA4FfjBkv7rKTJyfvsLFTzXsGATbL'
         self.api_url = '/api.php'
         
     def initNodeRepoHandling(self):
