@@ -429,7 +429,7 @@ class ApiCommunication:
             print("INFO >ComChain::ApiCommunication > Locking/unlocking the wallet " + address+ " on server "+self._server + " (" + self._contract_1+")")
             return self.sendTransaction(self.ACCOUNT_PARAM + data, admin_account)
                        
-    def pledgeAccount(self, admin_account, address, amount):
+    def pledgeAccount(self, admin_account, address, amount, **kwargs):#  message_to
         """Pledge a given amount to a Wallet on the current Currency (server)
 
         Parameters:
@@ -449,6 +449,13 @@ class ApiCommunication:
         if status==0:
             print("WARN >ComChain::ApiCommunication > The target wallet " + address+ " is locked on server "+self._server + " (" + self._contract_1+")")
         
+        # encode message if any
+        if "message_to" in kwargs and kwargs["message_to"]!="":
+            ciphered_message_to, public_key = self.encryptTransactionMessage(kwargs["message_to"], address=address)
+        else:
+            ciphered_message_to = ""    
+   
+        
         # Prepare data    
         amount_cent = int(100*amount)
         data = self.encodeAddressForTransaction(address)
@@ -456,6 +463,6 @@ class ApiCommunication:
 
         # send transaction
         print("INFO >ComChain::ApiCommunication > Pledging "+str(amount)+" to target wallet " + address+ " on server "+self._server + " (" + self._contract_1+") through end-point " + self._end_point)
-        return self.sendTransaction(self.PLEDGE + data, admin_account)
+        return self.sendTransaction(self.PLEDGE + data, admin_account,"",ciphered_message_to)
                      
 

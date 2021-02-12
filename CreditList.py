@@ -14,10 +14,11 @@ from tkinter import filedialog
 ## Parametrization
 ###############################################################################
 ## CSV File containing the transactions (if '' a file selector is open)
-csv_file = 'list_nant.csv'
+csv_file = ''
 ## Columns in the CSV file
 address_column='Address'
 amount_column='Montant'
+message_column='Message'
 
 ## .dat File containing the wallet sending the funds (if '' a file selector is open)
 account_file=''
@@ -61,23 +62,23 @@ def readCSV(file_path):
     return header, data
     
 def prepareTransactionData(header, data, address_column='Address',
-                           amount_column='Montant'):
+                           amount_column='Montant', message_column='Message'):
 
     add_ind = header.index(address_column)
     ammount_ind = header.index(amount_column)
+    message_ind = header.index(message_column)
 
 
     prepared_transactions=[]
     total=0
     for row in data:
-        prepared_transactions.append({'add':row[add_ind],'amount':float(row[ammount_ind])})
+        prepared_transactions.append({'add':row[add_ind],'amount':float(row[ammount_ind]),'message':row[message_ind]})
         total+=prepared_transactions[-1]['amount']
 
     return prepared_transactions, total
 
 def getCsvFile(csv_file):
     if len(csv_file)==0:
-            tk().withdraw()
             return filedialog.askopenfilename(title = 'Choose a CSV File')
     else:
         return csv_file
@@ -152,9 +153,9 @@ if not input('Ready to send the nantissement on '+server+': do you want to proce
 transaction_hash={}
 for tran in prepared_transactions:
     if tran['unlocked']==1:
-        res, r = api_com.pledgeAccount(sender_account, tran['add'], tran['amount']) 
+        res, r = api_com.pledgeAccount(sender_account, tran['add'], tran['amount'], message_to=tran['message']) 
         transaction_hash[res]=tran['add']
-        print("Transaction Nant sent to "+tran['add'] + ' ('+str(tran['amount'])+'LEM) Transaction Hash='+ res)
+        print("Transaction Nant sent to "+tran['add'] + ' ('+str(tran['amount'])+'LEM) with message "'+tran['message']+'" Transaction Hash='+ res)
         
         time.sleep( 30 ) # Delay for not overloading the BlockChain
     
