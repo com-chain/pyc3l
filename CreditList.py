@@ -67,6 +67,7 @@ def prepareTransactionData(header, data, address_column='Address',
     add_ind = header.index(address_column)
     ammount_ind = header.index(amount_column)
     message_ind = header.index(message_column)
+    
 
 
     prepared_transactions=[]
@@ -140,7 +141,8 @@ for tran in prepared_transactions:
     
     target_status = api_com.getAccountStatus(target_address)
     if target_status!=1:
-         print("Warning: The Target Wallet with address "+target_address+"is locked and will be skipped")
+        print("Warning: The Target Wallet with address "+target_address+"is locked and will be skipped")
+        tran['unlocked']=0
     else:
         tran['unlocked']=1
            
