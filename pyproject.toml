@@ -1,0 +1,27 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pyc3l"
+version = "%%version%%"
+authors = [
+  { name="Florian Dubath", email="florian@dubath.org" },
+]
+description = "ComChain API client library"
+readme = "README.md"
+requires-python = ">=3.7"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+  "ecdsa",
+  "web3",
+  "requests",
+  "eth_account",
+]
+[project.urls]
+"Homepage" = "https://github.com/com-chain/pyc3l"
+"Bug Tracker" = "https://github.com/com-chain/pyc3l/issues"
