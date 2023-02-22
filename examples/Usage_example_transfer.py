@@ -1,6 +1,6 @@
-from PythonClient.LocalAccountOpener import LocalAccountOpener
-from PythonClient.ApiHandling import ApiHandling
-from PythonClient.ApiCommunication import ApiCommunication
+from pyc3l.LocalAccountOpener import LocalAccountOpener
+from pyc3l.ApiHandling import ApiHandling
+from pyc3l.ApiCommunication import ApiCommunication
 
 # Load the API
 api_handling = ApiHandling()

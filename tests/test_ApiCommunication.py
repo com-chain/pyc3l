@@ -1,6 +1,6 @@
 import unittest
-from PythonClient.ApiHandling import ApiHandling
-from PythonClient.ApiCommunication import ApiCommunication
+from pyc3l.ApiHandling import ApiHandling
+from pyc3l.ApiCommunication import ApiCommunication
 
 class test_ApiCommunication(unittest.TestCase):
 
