@@ -1,9 +1,9 @@
 #!/usr/local/bin/python
 # coding: utf-8
 
-from PythonClient.LocalAccountOpener import LocalAccountOpener
-from PythonClient.ApiHandling import ApiHandling
-from PythonClient.ApiCommunication import ApiCommunication
+from pyc3l.LocalAccountOpener import LocalAccountOpener
+from pyc3l.ApiHandling import ApiHandling
+from pyc3l.ApiCommunication import ApiCommunication
 import sys
 import csv
 import time
