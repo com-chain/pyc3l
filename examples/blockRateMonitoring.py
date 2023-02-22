@@ -3,6 +3,22 @@ from pyc3l.ApiCommunication import ApiCommunication
 from datetime import datetime, timedelta
 import numpy as np
 import time
+import logging
+
+
+## Configure logging to go to stderr
+
+logger = logging.getLogger('pyc3l')
+ch = logging.StreamHandler()
+ch.setLevel(logging.DEBUG)
+## add formatter to ch
+# formatter = logging.Formatter('%(asctime)s %(levelname)-5s [%(name)s] %(message)s')
+formatter = logging.Formatter('%(levelname)-5s [%(name)s] %(message)s')
+ch.setFormatter(formatter)
+## add ch to logger
+logger.addHandler(ch)
+logger.setLevel(logging.DEBUG)
+
 
 # Load the API
 api_handling = ApiHandling()

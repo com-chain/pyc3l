@@ -6,6 +6,10 @@ from eth_account import Account
 from web3 import Web3
 from web3.eth import Eth
 import codecs
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 class objectview(object):
     def __init__(self, d):
@@ -222,7 +226,7 @@ class ApiCommunication:
         elif "address" in kwargs:
             response,r = self.getMessageKeys(kwargs["address"], False)
             if not "public_message_key" in response:
-                print("WARNIN : No message key for account " + kwargs["address"])
+                logger.warn("No message key for account %s", kwargs["address"])
                 return "",""
             public_message_key = response["public_message_key"]
         else:
@@ -238,7 +242,7 @@ class ApiCommunication:
         elif "address" in kwargs and "private_key" in kwargs:
             response,r = self.getMessageKeys(kwargs["address"], True)
             if not "private_message_key" in response:
-                print("WARNIN : No message key for account " + kwargs["address"])
+                logger.warn("No message key for account %s", kwargs["address"])
                 return "",""
             private_message_key = DecryptMessage(kwargs["private_key"], response["private_message_key"])
            
@@ -332,7 +336,13 @@ class ApiCommunication:
         data += self.encodeNumber(amount_cent)
 
         # send transaction
-        print("INFO >ComChain::ApiCommunication > Transferring "+str(amount)+" nantissed "+self._server + " from wallet "+sender_account.address+" to target wallet " + dest_address+ " on server "+self._server + " (" + self._contract_1+","+ self._contract_2+")")
+        logger.info("Transferring %s nantissed %s from wallet %s to target wallet %s on server %s",
+                    amount,
+                    self._server,
+                    sender_account.address,
+                    dest_address,
+                    "%s(%s, %s)" % (self._server, self._contract_1, self._contract_2)
+                    )
         return self.sendTransaction(self.NANT_TRANSFERT + data, sender_account, ciphered_message_from, ciphered_message_to, 2)
 
     
@@ -381,7 +391,15 @@ class ApiCommunication:
         data += self.encodeNumber(amount_cent)
 
         # send transaction
-        print("INFO >ComChain::ApiCommunication > Transferring "+str(amount)+" mutual credit "+self._server + " from wallet "+sender_account.address+" to target wallet " + dest_address+ " on server "+self._server + " (" + self._contract_1+","+ self._contract_2+")")
+        logger.info(
+            "Transferring %s mutual credit %s from wallet %s to target wallet %s on server %s",
+            amount,
+            self._server,
+            sender_account.address,
+            dest_address,
+            "%s(%s, %s)" % (self._server, self._contract_1, self._contract_2)
+        )
+
         return self.sendTransaction(self.CM_TRANSFERT + data, sender_account, ciphered_message_from, ciphered_message_to, 2)
                                                                                  
  
@@ -405,10 +423,10 @@ class ApiCommunication:
         status = self.getAccountStatus(address)
         
         if lock and status == 0:
-            print("INFO >ComChain::ApiCommunication > The wallet " + address+ " is already locked")
+            logger.info("The wallet %s is already locked", address)
             return "", objectview({"text":"N.A."}) 
         elif not lock and status == 1:
-            print("INFO >ComChain::ApiCommunication > The wallet " + address+ " is already unlocked")
+            logger.info("The wallet %s is already unlocked", address)
             return "", objectview({"text":"N.A."}) 
         else:
         
@@ -426,7 +444,10 @@ class ApiCommunication:
             data += self.encodeNumber(status) + self.encodeNumber(acc_type) + self.encodeNumber(int(lim_p*100)) + self.encodeNumber(int(lim_m*100))
             
             # send the transaction
-            print("INFO >ComChain::ApiCommunication > Locking/unlocking the wallet " + address+ " on server "+self._server + " (" + self._contract_1+")")
+            logger.info("Locking/unlocking the wallet %s on server %s (%s)",
+                        address,
+                        self._server,
+                        self._contract_1)
             return self.sendTransaction(self.ACCOUNT_PARAM + data, admin_account)
                        
     def pledgeAccount(self, admin_account, address, amount, **kwargs):#  message_to
@@ -447,7 +468,10 @@ class ApiCommunication:
         # Get wallet infos
         status = self.getAccountStatus(address)
         if status==0:
-            print("WARN >ComChain::ApiCommunication > The target wallet " + address+ " is locked on server "+self._server + " (" + self._contract_1+")")
+            logger.warn("The target wallet %s is locked on server %s (%s)",
+                        address,
+                        self._server,
+                        self._contract_1)
         
         # encode message if any
         if "message_to" in kwargs and kwargs["message_to"]!="":
@@ -462,7 +486,13 @@ class ApiCommunication:
         data += self.encodeNumber(amount_cent)
 
         # send transaction
-        print("INFO >ComChain::ApiCommunication > Pledging "+str(amount)+" to target wallet " + address+ " on server "+self._server + " (" + self._contract_1+") through end-point " + self._end_point)
+        logger.info("Pledging %s to target wallet %s on server %s (%s) through end-point %s",
+                    amount,
+                    address,
+                    self._server,
+                    self._contract_1,
+                    self._end_point
+        )
         return self.sendTransaction(self.PLEDGE + data, admin_account,"",ciphered_message_to)
                      
 

@@ -3,8 +3,13 @@ import json
 from random import randrange
 import datetime
 import os.path
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 class ApiHandling:
+
     def __init__(self, endpoint_file=None):
         ''' Constructor for this ApiHandling. '''
         if not endpoint_file:
@@ -24,7 +29,7 @@ class ApiHandling:
         
     def initNodeRepoHandling(self):
         if not os.path.isfile(self.endpoint_file):
-            print("INFO >ComChain::ApiHandling > Create Local repo file named " + self.endpoint_file)
+            logger.info("Create local endpoint file named %r.", self.endpoint_file)
             os.makedirs(
                 os.path.dirname(self.endpoint_file),
                 exist_ok=True
@@ -52,11 +57,11 @@ class ApiHandling:
         while len(current_list)>0:
             index = randrange(len(current_list))
             url = current_list[index]+self.ipfs_node_list_url+'?_='+str(datetime.datetime.now())
-            print("INFO >ComChain::ApiHandling > Getting node list from  :"+url)
+            logger.info("Getting node list from %r", url)
             try:
                 r = requests.get(url = url)
                 if r.status_code!=200: 
-                    print('WARN >ComChain::ApiHandling > '+url+' return status '+str(r.status_code))
+                    logger.warn('return status %d for %r', r.status_code, url)
                     continue
                 else:
                     found=True
@@ -66,11 +71,11 @@ class ApiHandling:
                             file.write(line+ "\n") 
                     break
             except: 
-                print('WARN >ComChain::ApiHandling > '+url+' rises an exception')
+                logger.warn('exception raised by %r', url)
                 del current_list[index]
         if not found:
             raise Exception("Unable to find a valid ipfs node. Please check that you are online.") 
-            
+
     def getIPFSEndpoint(self):
         end_point_list = self.getNodeRepo();
         nb_try=0
@@ -79,14 +84,15 @@ class ApiHandling:
             nb_try+=1
             index = randrange(len(end_point_list))
             try:
-                r = requests.get(url = end_point_list[index]+self.ipfs_config_url+'/ping.json?_='+str(datetime.datetime.now()))
+                url = end_point_list[index]+self.ipfs_config_url+'/ping.json?_='+str(datetime.datetime.now())
+                r = requests.get(url=url)
                 if r.status_code==200:
                     found=True
                     return end_point_list[index]
                 else:
-                    print('WARN >ComChain::ApiHandling > ' + end_point_list[index]+self.ipfs_config_url+'/ping.json return status '+str(r.status_code))
+                    logger.warn('status %d from %r', r.status_code, url)
             except :
-                print('WARN >ComChain::ApiHandling > ' + end_point_list[index]+self.ipfs_config_url+'/ping.json throw error') 
+                logger.warn('Exception raised from %r', url)
            
         if not found:
             raise Exception("Unable to find a valid ipfs node after "+str(nb_try)+" Try.")   
@@ -105,15 +111,16 @@ class ApiHandling:
             nb_try+=1
             index = randrange(len(end_point_list))
             try:
-                r = requests.get(url = end_point_list[index]+self.api_url+'?_='+str(datetime.datetime.now()))
+                url = end_point_list[index]+self.api_url+'?_='+str(datetime.datetime.now())
+                r = requests.get(url=url)
                 if r.status_code==200:
                     found=True
-                    print('INFO >Selected end-point: ' + end_point_list[index])
+                    logger.info('Selected end-point: %r', end_point_list[index])
                     return end_point_list[index]+self.api_url
                 else:
-                    print('WARN >ComChain::ApiHandling > ' + end_point_list[index]+self.api_url+' return status '+str(r.status_code))
-            except :
-                print('WARN >ComChain::ApiHandling > ' + end_point_list[index]+self.api_url+' throw error') 
+                    logger.warn('status %s from %r', str(r.status_code), url)
+            except:
+                logger.warn('Exception raised by %r', url)
                 
         if not found:
             raise Exception("Unable to find a valid api endpoint after "+str(nb_try)+" Try.")             
