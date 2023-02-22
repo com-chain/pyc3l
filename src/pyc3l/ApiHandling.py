@@ -5,9 +5,18 @@ import datetime
 import os.path
 
 class ApiHandling:
-    def __init__(self, endpoint_file="Current_Ednpoints.txt"):
+    def __init__(self, endpoint_file=None):
         ''' Constructor for this ApiHandling. '''
-        self.endpoint_file = endpoint_file
+        if not endpoint_file:
+            home = os.path.expanduser('~')
+
+            xdg_state_home = os.environ.get('XDG_STATE_HOME') or \
+                os.path.join(home, '.local', 'state')
+
+            self.endpoint_file = os.path.join(
+                xdg_state_home, "pyc3l", "current_endpoints.txt")
+        else:
+            self.endpoint_file = endpoint_file
         self.default_enpoints = ['https://node-cc-001.cchosting.org', 'https://node-001.cchosting.org', 'https://node-002.cchosting.org', 'https://node-003.cchosting.org', 'https://node-004.cchosting.org']
         self.ipfs_config_url = '/ipns/QmaAAZor2uLKnrzGCwyXTSwogJqmPjJgvpYgpmtz5XcSmR/configs/'
         self.ipfs_node_list_url = '/ipns/QmcRWARTpuEf9E87cdA4FfjBkv7rKTJyfvsLFTzXsGATbL'
@@ -16,6 +25,10 @@ class ApiHandling:
     def initNodeRepoHandling(self):
         if not os.path.isfile(self.endpoint_file):
             print("INFO >ComChain::ApiHandling > Create Local repo file named " + self.endpoint_file)
+            os.makedirs(
+                os.path.dirname(self.endpoint_file),
+                exist_ok=True
+            )
             
         with open(self.endpoint_file, "w") as file:
                 for line in self.default_enpoints:
