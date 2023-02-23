@@ -124,6 +124,9 @@ class ApiHandling:
         This implementation is atomic and thus race-condition free.
 
         """
+        if set(self.read_endpoints()) == set(endpoints):
+            logger.info("Saved endpoint list is already up-to-date.")
+            return
         f, tmp = tempfile.mkstemp()
         with closing(os.fdopen(f, "w")) as file:
             for line in endpoints:
