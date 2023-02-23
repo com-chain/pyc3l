@@ -48,7 +48,6 @@ class ApiHandling:
 
     def updateNodeRepo(self):
         current_list = self.getNodeRepo()
-        found = False
         while len(current_list) > 0:
             index = randrange(len(current_list))
             url = (
@@ -60,21 +59,17 @@ class ApiHandling:
             logger.info("Getting node list from %r", url)
             try:
                 r = requests.get(url=url)
-                if r.status_code != 200:
-                    logger.warn("return status %d for %r", r.status_code, url)
-                    continue
-                else:
-                    found = True
-                    self.save_endpoints(json.loads(r.text))
-
-                    break
             except:
                 logger.warn("exception raised by %r", url)
                 del current_list[index]
-        if not found:
-            raise Exception(
-                "Unable to find a valid ipfs node. Please check that you are online."
-            )
+                continue
+            if r.status_code == 200:
+                self.save_endpoints(r.json())
+                return
+            logger.warn("return status %d for %r", r.status_code, url)
+        raise Exception(
+            "Unable to find a valid ipfs node. Please check that you are online."
+        )
 
     def getIPFSEndpoint(self):
         end_point_list = self.getNodeRepo()
@@ -100,9 +95,7 @@ class ApiHandling:
                 logger.warn("Exception raised from %r", url)
 
         if not found:
-            raise Exception(
-                "Unable to find a valid ipfs node after " + str(nb_try) + " Try."
-            )
+            raise Exception("Unable to find a valid ipfs node after %d tries." % nb_try)
 
     def getCurrentBlock(self, endpoint=""):
         if len(endpoint) == 0:
