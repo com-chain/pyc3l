@@ -1,7 +1,6 @@
 import requests
 from web3.eth import Eth
 
-import json
 import codecs
 import logging
 
@@ -63,7 +62,7 @@ def callNumericInfo(api, contract, function, address, divider=100.0):
         raise Exception(
             "Error while contacting the API(" + api + "):" + str(r.status_code)
         )
-    response_parsed = json.loads(r.text)
+    response_parsed = r.json()
     if not response_parsed["error"]:
         return decodeNumber(response_parsed["data"]) / divider
     else:
@@ -131,7 +130,7 @@ class ApiCommunication:
         data = {"hash": transaction_hash}
 
         r = requests.post(url=self._endpoint, data=data)
-        response_parsed = json.loads(r.text)
+        response_parsed = r.json()
         return response_parsed["transaction"]["blockNumber"]
 
     def getNumericalInfo(
@@ -154,7 +153,7 @@ class ApiCommunication:
         data = {"txdata": address}
 
         r = requests.post(url=self._endpoint, data=data)
-        response_parsed = json.loads(r.text)
+        response_parsed = r.json()
         return response_parsed["data"]
 
     def checkAdmin(self, admin_address):
@@ -234,7 +233,7 @@ class ApiCommunication:
         r = requests.post(url=self._endpoint, data=raw_tx)
         if r.status_code != 200:
             raise Exception("Error while contacting the API:" + str(r.status_code))
-        response_parsed = json.loads(r.text)
+        response_parsed = r.json()
         return response_parsed["data"], r
 
     ############################### messages with transaction handling
@@ -251,7 +250,7 @@ class ApiCommunication:
         r = requests.get(url=url)
         if r.status_code != 200:
             raise Exception("Error while contacting the API:" + str(r.status_code))
-        response_parsed = json.loads(r.text)
+        response_parsed = r.json()
         return response_parsed, r
 
     def encryptTransactionMessage(
