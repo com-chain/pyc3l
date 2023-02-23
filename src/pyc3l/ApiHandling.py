@@ -28,7 +28,7 @@ class ApiHandling:
             )
         else:
             self.endpoint_file = endpoint_file
-        self.default_enpoints = [
+        self.default_endpoints = [
             "https://node-cc-001.cchosting.org",
             "https://node-001.cchosting.org",
             "https://node-002.cchosting.org",
@@ -43,7 +43,7 @@ class ApiHandling:
 
     def getNodeRepo(self):
         if not os.path.isfile(self.endpoint_file):
-            return self.default_enpoints
+            return self.default_endpoints
         return self.read_endpoints()
 
     def updateNodeRepo(self):
