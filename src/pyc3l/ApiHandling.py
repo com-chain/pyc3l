@@ -30,21 +30,12 @@ class ApiHandling:
         self.ipfs_config_url = '/ipns/QmaAAZor2uLKnrzGCwyXTSwogJqmPjJgvpYgpmtz5XcSmR/configs/'
         self.ipfs_node_list_url = '/ipns/QmcRWARTpuEf9E87cdA4FfjBkv7rKTJyfvsLFTzXsGATbL'
         self.api_url = '/api.php'
-        
-    def initNodeRepoHandling(self):
-        self.save_endpoints(self.default_enpoints)
-                    
-    def getNodeRepo(self):
-        self.initNodeRepoHandling()
 
-        with open(self.endpoint_file, "r") as file:
-            lines = file.readlines()
-            
-        # remove the endline char    
-        for index in range(len(lines)) :
-            lines[index]=lines[index][:-1]
-            
-        return lines
+
+    def getNodeRepo(self):
+        if not os.path.isfile(self.endpoint_file):
+            return self.default_enpoints
+        return self.read_endpoints()
         
     def updateNodeRepo(self):
         current_list = self.getNodeRepo()
@@ -145,3 +136,12 @@ class ApiHandling:
             )
         shutil.move(tmp, self.endpoint_file)  ## atomic
 
+    def read_endpoints(self):
+        with open(self.endpoint_file, "r") as file:
+            lines = file.readlines()
+
+        # remove the endline char
+        for index in range(len(lines)) :
+            lines[index]=lines[index][:-1]
+
+        return lines
