@@ -17,14 +17,6 @@ This code is for python3 and uses:
 - eth_account
 - web3
 - ecdsa
-- tkinter
-
-You can check if tkinter is installed: open python3 and type:
-
-```
->>> import tkinter
->>> tkinter._test()
-```
 
 ## Installation
 
