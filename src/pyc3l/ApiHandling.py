@@ -40,31 +40,33 @@ class ApiHandling:
         )
         self.ipfs_node_list_url = "/ipns/QmcRWARTpuEf9E87cdA4FfjBkv7rKTJyfvsLFTzXsGATbL"
         self.api_url = "/api.php"
+        self._endpoints = None
 
-    def getNodeRepo(self):
-        if not os.path.isfile(self.endpoint_file):
-            return self.default_endpoints
-        return self.read_endpoints()
+    @property
+    def endpoints(self):
+        if not self._endpoints:
+            self._endpoints = self._read_endpoints()
+        return self._endpoints
 
     def updateNodeRepo(self):
-        current_list = self.getNodeRepo()
-        while len(current_list) > 0:
-            index = randrange(len(current_list))
+        endpoints = self.endpoints[:]
+        while len(endpoints) > 0:
+            index = randrange(len(endpoints))
             url = (
-                current_list[index]
+                endpoints[index]
                 + self.ipfs_node_list_url
                 + "?_="
                 + str(datetime.datetime.now())
             )
-            logger.info("Getting node list from %r", url)
+            logger.info("getting node list from %r", url)
             try:
-                r = requests.get(url=url)
+                r = requests.get(url)
             except:
                 logger.warn("exception raised by %r", url)
-                del current_list[index]
+                del endpoints[index]
                 continue
             if r.status_code == 200:
-                self.save_endpoints(r.json())
+                self._save_endpoints(r.json())
                 return
             logger.warn("return status %d for %r", r.status_code, url)
         raise Exception(
@@ -72,70 +74,54 @@ class ApiHandling:
         )
 
     def getIPFSEndpoint(self):
-        end_point_list = self.getNodeRepo()
-        nb_try = 0
-        found = False
-        while nb_try < 20:
-            nb_try += 1
-            index = randrange(len(end_point_list))
+        for nb_try in range(1, 21):
+            index = randrange(len(self.endpoints))
+            endpoint = self.endpoints[index]
+            url = (
+                endpoint
+                + self.ipfs_config_url
+                + "/ping.json?_="
+                + str(datetime.datetime.now())
+            )
             try:
-                url = (
-                    end_point_list[index]
-                    + self.ipfs_config_url
-                    + "/ping.json?_="
-                    + str(datetime.datetime.now())
-                )
                 r = requests.get(url=url)
-                if r.status_code == 200:
-                    found = True
-                    return end_point_list[index]
-                else:
-                    logger.warn("status %d from %r", r.status_code, url)
             except:
                 logger.warn("Exception raised from %r", url)
+                continue
+            if r.status_code == 200:
+                return endpoint
+            else:
+                logger.warn("status %d from %r", r.status_code, url)
 
-        if not found:
-            raise Exception("Unable to find a valid ipfs node after %d tries." % nb_try)
+        raise Exception("Unable to find a valid ipfs node after %d tries." % nb_try)
 
-    def getCurrentBlock(self, endpoint=""):
-        if len(endpoint) == 0:
+    def getCurrentBlock(self, endpoint=None):
+        if not endpoint:
             endpoint = self.getApiEndpoint()
-        r = requests.get(url=endpoint + "?_=" + str(datetime.datetime.now()))
+        r = requests.get(endpoint + "?_=" + str(datetime.datetime.now()))
         return r.text
 
     def getApiEndpoint(self):
-        end_point_list = self.getNodeRepo()
-        nb_try = 0
-        found = False
-        while nb_try < 20:
-            nb_try += 1
-            index = randrange(len(end_point_list))
+        for nb_try in range(1, 21):
+            index = randrange(len(self.endpoints))
+            endpoint = self.endpoints[index]
+            url = endpoint + self.api_url + "?_=" + str(datetime.datetime.now())
             try:
-                url = (
-                    end_point_list[index]
-                    + self.api_url
-                    + "?_="
-                    + str(datetime.datetime.now())
-                )
-                r = requests.get(url=url)
-                if r.status_code == 200:
-                    found = True
-                    logger.info("Selected end-point: %r", end_point_list[index])
-                    return end_point_list[index] + self.api_url
-                else:
-                    logger.warn("status %s from %r", str(r.status_code), url)
+                r = requests.get(url)
             except:
                 logger.warn("Exception raised by %r", url)
+                continue
+            if r.status_code == 200:
+                logger.info("Selected endpoint: %r", endpoint)
+                return endpoint + self.api_url
+            logger.warn("status %s from %r", str(r.status_code), url)
 
-        if not found:
-            raise Exception(
-                "Unable to find a valid api endpoint after " + str(nb_try) + " Try."
-            )
+        raise Exception("Unable to find a valid API endpoint after %d tries." % nb_try)
 
     def getServerContract(self, server_name):
-        end_point_url = self.getIPFSEndpoint()
+        endpoint = self.getIPFSEndpoint()
         r = requests.get(
-            url=end_point_url
+            url=endpoint
             + self.ipfs_config_url
             + "/"
             + server_name
@@ -143,20 +129,21 @@ class ApiHandling:
             + str(datetime.datetime.now())
         )
         if r.status_code != 200:
-            raise Exception("Unknow server " + server_name)
-        response_parsed = json.loads(r.text)
+            raise Exception("Unknown server " + server_name)
+        server_data = r.json()["server"]
+
         return (
-            response_parsed["server"]["contract_1"],
-            response_parsed["server"]["contract_2"],
+            server_data["contract_1"],
+            server_data["contract_2"],
         )
 
-    def save_endpoints(self, endpoints):
+    def _save_endpoints(self, endpoints):
         """Save endpoints in state file
 
         This implementation is atomic and thus race-condition free.
 
         """
-        if set(self.read_endpoints()) == set(endpoints):
+        if set(self.endpoints) == set(endpoints):
             logger.info("Saved endpoint list is already up-to-date.")
             return
         f, tmp = tempfile.mkstemp()
@@ -167,8 +154,11 @@ class ApiHandling:
             logger.info("Create local endpoint file named %r.", self.endpoint_file)
             os.makedirs(os.path.dirname(self.endpoint_file), exist_ok=True)
         shutil.move(tmp, self.endpoint_file)  ## atomic
+        self._endpoints = endpoints
 
-    def read_endpoints(self):
+    def _read_endpoints(self):
+        if not os.path.isfile(self.endpoint_file):
+            return self.default_endpoints
         with open(self.endpoint_file, "r") as file:
             lines = file.readlines()
 
