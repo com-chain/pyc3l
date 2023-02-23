@@ -15,6 +15,61 @@ class objectview(object):
         self.__dict__ = d
 
 
+def encodeNumber(number):
+    if number < 0:
+        return hex(16**64 + number)[2:].zfill(64)
+    else:
+        return str(hex(number))[2:].zfill(64)
+
+
+def decodeNumber(hexnumber):
+    res = 0
+    if hexnumber[0].lower() == "f" or (
+        hexnumber[0:2] == "0x" and hexnumber[3].lower() == "f"
+    ):
+        res = -(16**64)
+
+    if hexnumber[0:2] != "0x":
+        hexnumber = "0x" + hexnumber
+
+    return int(hexnumber, 0) + res
+
+
+def encodeAddressForTransaction(address):
+    full_address = address
+    if full_address.startswith("0x"):
+        full_address = full_address[2:]
+    if len(full_address) != 40:
+
+        raise Exception("Missformed wallet address: " + address)
+    return full_address.zfill(64)
+
+
+def buildInfoData(function, address):
+    if address.startswith("0x"):
+        address = address[2:]
+    if not function.startswith("0x"):
+        function = "0x" + function
+    return function + address.zfill(64)
+
+
+def callNumericInfo(api, contract, function, address, divider=100.0):
+    data = {
+        "ethCall[data]": buildInfoData(function, address),
+        "ethCall[to]": contract,
+    }
+    r = requests.post(url=api, data=data)
+    if r.status_code != 200:
+        raise Exception(
+            "Error while contacting the API(" + api + "):" + str(r.status_code)
+        )
+    response_parsed = json.loads(r.text)
+    if not response_parsed["error"]:
+        return decodeNumber(response_parsed["data"]) / divider
+    else:
+        return -1
+
+
 class ApiCommunication:
     def __init__(self, api_handler, server):
         self._api_handler = api_handler
@@ -22,7 +77,7 @@ class ApiCommunication:
         self._contract_1, self._contract_2 = self._api_handler.getServerContract(
             self._server
         )
-        self._end_point = self._api_handler.getApiEndpoint()
+        self._endpoint = self._api_handler.getApiEndpoint()
         self._current_block = ""
         self._additional_nonce = 0
 
@@ -50,70 +105,20 @@ class ApiCommunication:
         self.NANT_TRANSFERT = "0xa5f7c148"
         self.CM_TRANSFERT = "0x60ca9c4c"
 
-    def encodeNumber(self, number):
-        if number < 0:
-            return hex(16**64 + number)[2:].zfill(64)
-        else:
-            return str(hex(number))[2:].zfill(64)
-
-    def decodeNumber(self, hexnumber):
-        res = 0
-        if hexnumber[0].lower() == "f" or (
-            hexnumber[0:2] == "0x" and hexnumber[3].lower() == "f"
-        ):
-            res = -(16**64)
-
-        if hexnumber[0:2] != "0x":
-            hexnumber = "0x" + hexnumber
-
-        return int(hexnumber, 0) + res
-
-    def encodeAddressForTransaction(self, address):
-        full_address = address
-        if full_address.startswith("0x"):
-            full_address = full_address[2:]
-        if len(full_address) != 40:
-
-            raise Exception("Missformed wallet address: " + address)
-        return full_address.zfill(64)
-
-    def buildInfoData(self, function, address):
-        if address.startswith("0x"):
-            address = address[2:]
-        if not function.startswith("0x"):
-            function = "0x" + function
-        return function + address.zfill(64)
-
-    def callNumericInfo(self, api, contract, function, address, divider=100.0):
-        data = {
-            "ethCall[data]": self.buildInfoData(function, address),
-            "ethCall[to]": contract,
-        }
-        r = requests.post(url=api, data=data)
-        if r.status_code != 200:
-            raise Exception(
-                "Error while contacting the API(" + api + "):" + str(r.status_code)
-            )
-        response_parsed = json.loads(r.text)
-        if not response_parsed["error"]:
-            return self.decodeNumber(response_parsed["data"]) / divider
-        else:
-            return -1
-
     def resetApis(self, api_end_point="", use_new=False):
 
         # get the endpoint
         if len(api_end_point) != 0:
-            self._end_point = api_end_point
+            self._endpoint = api_end_point
         elif use_new:
-            self._end_point = self._api_handler.getApiEndpoint()
+            self._endpoint = self._api_handler.getApiEndpoint()
 
     def getBlockNumber(self):
-        r = requests.post(url=self._end_point)
+        r = requests.post(self._endpoint)
         if r.status_code != 200:
             raise Exception(
                 "Error while contacting the API("
-                + self._end_point
+                + self._endpoint
                 + "):"
                 + str(r.status_code)
             )
@@ -121,11 +126,11 @@ class ApiCommunication:
 
     def getTransactionBLock(self, transaction_hash, api_end_point=""):
         if len(api_end_point) != 0:
-            self._end_point = api_end_point
+            self._endpoint = api_end_point
 
         data = {"hash": transaction_hash}
 
-        r = requests.post(url=self._end_point, data=data)
+        r = requests.post(url=self._endpoint, data=data)
         response_parsed = json.loads(r.text)
         return response_parsed["transaction"]["blockNumber"]
 
@@ -138,17 +143,17 @@ class ApiCommunication:
         else:
             contract = self._contract_1
 
-        return self.callNumericInfo(
-            self._end_point, contract, function, address_to_check, divider
+        return callNumericInfo(
+            self._endpoint, contract, function, address_to_check, divider
         )
 
     def getTrInfos(self, address, api_end_point=""):
         if len(api_end_point) != 0:
-            self._end_point = api_end_point
+            self._endpoint = api_end_point
 
         data = {"txdata": address}
 
-        r = requests.post(url=self._end_point, data=data)
+        r = requests.post(url=self._endpoint, data=data)
         response_parsed = json.loads(r.text)
         return response_parsed["data"]
 
@@ -226,7 +231,7 @@ class ApiCommunication:
         if ciphered_message_to != "":
             raw_tx["memo_to"] = ciphered_message_to
 
-        r = requests.post(url=self._end_point, data=raw_tx)
+        r = requests.post(url=self._endpoint, data=raw_tx)
         if r.status_code != 200:
             raise Exception("Error while contacting the API:" + str(r.status_code))
         response_parsed = json.loads(r.text)
@@ -239,7 +244,7 @@ class ApiCommunication:
             query_string = query_string + "&private=1"
 
         url = (
-            self._end_point[: -len(self._api_handler.api_url)]
+            self._endpoint[: -len(self._api_handler.api_url)]
             + self.KEYSTORE
             + query_string
         )
@@ -453,8 +458,8 @@ class ApiCommunication:
 
         # Prepare data
         amount_cent = int(100 * amount)
-        data = self.encodeAddressForTransaction(dest_address)
-        data += self.encodeNumber(amount_cent)
+        data = encodeAddressForTransaction(dest_address)
+        data += encodeNumber(amount_cent)
 
         # send transaction
         logger.info(
@@ -542,8 +547,8 @@ class ApiCommunication:
 
         # Prepare data
         amount_cent = int(100 * amount)
-        data = self.encodeAddressForTransaction(dest_address)
-        data += self.encodeNumber(amount_cent)
+        data = encodeAddressForTransaction(dest_address)
+        data += encodeNumber(amount_cent)
 
         # send transaction
         logger.info(
@@ -600,12 +605,12 @@ class ApiCommunication:
                 status = 0
 
             # prepare the data
-            data = self.encodeAddressForTransaction(address)
+            data = encodeAddressForTransaction(address)
             data += (
-                self.encodeNumber(status)
-                + self.encodeNumber(acc_type)
-                + self.encodeNumber(int(lim_p * 100))
-                + self.encodeNumber(int(lim_m * 100))
+                encodeNumber(status)
+                + encodeNumber(acc_type)
+                + encodeNumber(int(lim_p * 100))
+                + encodeNumber(int(lim_m * 100))
             )
 
             # send the transaction
@@ -652,8 +657,8 @@ class ApiCommunication:
 
         # Prepare data
         amount_cent = int(100 * amount)
-        data = self.encodeAddressForTransaction(address)
-        data += self.encodeNumber(amount_cent)
+        data = encodeAddressForTransaction(address)
+        data += encodeNumber(amount_cent)
 
         # send transaction
         logger.info(
@@ -662,7 +667,7 @@ class ApiCommunication:
             address,
             self._server,
             self._contract_1,
-            self._end_point,
+            self._endpoint,
         )
         return self.sendTransaction(
             self.PLEDGE + data, admin_account, "", ciphered_message_to
