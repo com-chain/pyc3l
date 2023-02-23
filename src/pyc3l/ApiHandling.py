@@ -1,6 +1,5 @@
 import requests
 
-import json
 from random import randrange
 import datetime
 import os.path
@@ -61,7 +60,7 @@ class ApiHandling:
             logger.info("getting node list from %r", url)
             try:
                 r = requests.get(url)
-            except:
+            except Exception:
                 logger.warn("exception raised by %r", url)
                 del endpoints[index]
                 continue
@@ -85,7 +84,7 @@ class ApiHandling:
             )
             try:
                 r = requests.get(url=url)
-            except:
+            except Exception:
                 logger.warn("Exception raised from %r", url)
                 continue
             if r.status_code == 200:
@@ -108,7 +107,7 @@ class ApiHandling:
             url = endpoint + self.api_url + "?_=" + str(datetime.datetime.now())
             try:
                 r = requests.get(url)
-            except:
+            except Exception:
                 logger.warn("Exception raised by %r", url)
                 continue
             if r.status_code == 200:
