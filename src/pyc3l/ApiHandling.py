@@ -4,6 +4,10 @@ from random import randrange
 import datetime
 import os.path
 import logging
+import tempfile
+import os
+import shutil
+from contextlib import closing
 
 logger = logging.getLogger(__name__)
 
@@ -28,16 +32,7 @@ class ApiHandling:
         self.api_url = '/api.php'
         
     def initNodeRepoHandling(self):
-        if not os.path.isfile(self.endpoint_file):
-            logger.info("Create local endpoint file named %r.", self.endpoint_file)
-            os.makedirs(
-                os.path.dirname(self.endpoint_file),
-                exist_ok=True
-            )
-            
-        with open(self.endpoint_file, "w") as file:
-                for line in self.default_enpoints:
-                    file.write(line + "\n") 
+        self.save_endpoints(self.default_enpoints)
                     
     def getNodeRepo(self):
         self.initNodeRepoHandling()
@@ -65,10 +60,8 @@ class ApiHandling:
                     continue
                 else:
                     found=True
-                    response_parsed = json.loads(r.text)
-                    with open(self.endpoint_file, "w") as file:
-                        for line in response_parsed:
-                            file.write(line+ "\n") 
+                    self.save_endpoints(json.loads(r.text))
+
                     break
             except: 
                 logger.warn('exception raised by %r', url)
@@ -133,3 +126,22 @@ class ApiHandling:
             raise Exception("Unknow server "+server_name)
         response_parsed = json.loads(r.text)
         return response_parsed['server']['contract_1'], response_parsed['server']['contract_2']                         
+
+    def save_endpoints(self, endpoints):
+        """Save endpoints in state file
+
+        This implementation is atomic and thus race-condition free.
+
+        """
+        f, tmp = tempfile.mkstemp()
+        with closing(os.fdopen(f, "w")) as file:
+            for line in endpoints:
+                file.write(line + "\n")
+        if not os.path.isfile(self.endpoint_file):
+            logger.info("Create local endpoint file named %r.", self.endpoint_file)
+            os.makedirs(
+                os.path.dirname(self.endpoint_file),
+                exist_ok=True
+            )
+        shutil.move(tmp, self.endpoint_file)  ## atomic
+
