@@ -8,6 +8,7 @@ import tempfile
 import os
 import shutil
 import traceback
+import time
 
 from contextlib import closing
 
@@ -26,6 +27,7 @@ class ApiHandling:
         "https://node-003.cchosting.org",
         "https://node-004.cchosting.org",
     ]
+    UPDATE_INTERVAL = 60 * 15  ## in sec
 
     def __init__(self, endpoint_file=None):
         """Constructor for this ApiHandling."""
@@ -39,35 +41,48 @@ class ApiHandling:
     @property
     def endpoints(self):
         if not self._endpoints:
-            self._endpoints = set(self.load() or self.DEFAULT_ENDPOINTS[:])
+            endpoints, mtime = self._load()
+            if endpoints is None:
+                endpoints = self.DEFAULT_ENDPOINTS
+            if time.time() - mtime > self.UPDATE_INTERVAL:
+                self._update(force=True)
+                endpoints = self._load()[0]
+            self._endpoints = endpoints
         return self._endpoints
 
-    def updateNodeRepo(self):
-        for endpoint in random.sample(list(self.endpoints), k=len(self.endpoints)):
-            logger.debug("try to get endpoint list from %r", endpoint)
+    def _update(self, force=False):
+        logger.info("Updating endpoint list")
+        ## Avoid to use self.endpoints for recursivity reasons
+        endpoints = self._endpoints or self._load()[0] or set(self.DEFAULT_ENDPOINTS)
+        for endpoint in random.sample(list(endpoints), k=len(endpoints)):
+            logger.debug("  Try to get endpoint list from %r", endpoint)
             r = self.request(f"{endpoint}{self.IPFS_NODE_LIST_PATH}")
             if r is False:
                 continue
 
-            logger.info("getting endpoint list from %r", endpoint)
-            new_endpoints = set(e[:-1] if e[-1] == "/" else e for e in r.json())
-            if self.endpoints == new_endpoints:
-                logger.info("saved endpoint list is already up-to-date.")
-            else:
-                removed = self.endpoints - new_endpoints
-                added = new_endpoints - self.endpoints
-                msg = "\n".join(
-                    ["  - %s" % e for e in removed] + ["  + %s" % e for e in added]
-                )
-                logger.info("Updating endpoint list:\n%s", msg)
-
-                logger.info("saved endpoint list is already up-to-date.")
-                self.save(new_endpoints)
-                self._endpoints = new_endpoints
+        if r is False:
+            logger.error("Failed to get new endpoint list.")
             return
-        raise Exception(
-            "Unable to find a valid ipfs node. Please check that you are online."
-        )
+
+        logger.info("  Getting endpoint list from %r", endpoint)
+        new_endpoints = set(e[:-1] if e[-1] == "/" else e for e in r.json())
+        modified = endpoints != new_endpoints
+        if not force and not modified:
+            logger.info("saved endpoint list is already up-to-date.")
+            return
+
+        if modified:
+            removed = endpoints - new_endpoints
+            added = new_endpoints - endpoints
+            msg = "\n".join(
+                ["  - %s" % e for e in removed] + ["  + %s" % e for e in added]
+            )
+            logger.info("  Updating endpoint list:\n%s", msg)
+        else:
+            logger.info("  Update endpoint last modification time.")
+
+        self._save(new_endpoints)
+        self._endpoints = new_endpoints
 
     def getIPFSEndpoint(self):
         for nb_try in range(1, 21):
@@ -113,22 +128,29 @@ class ApiHandling:
         logger.debug("request to %r", url)
         try:
             r = requests.get(url)
-        except Exception:
-            logger.warn("Exception raised by %r:\n%s", url, format_last_exception())
+        except Exception as e:
+            logger.warn("request raised exception: %s", e)
             return False
         if r.status_code != 200:
             logger.warn("status %s from %r", str(r.status_code), url)
             return False
         return r
 
-    def save(self, endpoints):
+    def _save(self, endpoints):
         self._store.save("\n".join(endpoints))
 
-    def load(self):
-        saved_data = self._store.load()
+    def _load(self):
+        saved_data, last_mtime = self._store.load(with_mtime=True)
         if saved_data is None:
-            return []
-        return [e[:-1] if e[-1] == "/" else e for e in saved_data.split("\n")]
+            return set(), last_mtime
+        logger.info(
+            "read local list of endpoint, last mtime: %s",
+            datetime.datetime.utcfromtimestamp(last_mtime).isoformat(),
+        )
+        return (
+            set([e[:-1] if e[-1] == "/" else e for e in saved_data.split("\n")]),
+            last_mtime,
+        )
 
 
 class SimpleFileStore:
@@ -193,11 +215,12 @@ class SimpleFileStore:
             os.makedirs(os.path.dirname(self._filename), exist_ok=True)
         shutil.move(tmp, self._filename)  ## atomic
 
-    def load(self):
+    def load(self, with_mtime=False):
         if not os.path.isfile(self._filename):
-            return None
+            return (None, 0) if with_mtime else None
         with open(self._filename, "r") as file:
-            return file.read()
+            data = file.read()
+        return (data, os.path.getmtime(self._filename)) if with_mtime else data
 
 
 class StateFileStore(SimpleFileStore):
