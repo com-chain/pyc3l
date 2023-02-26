@@ -243,7 +243,7 @@ class ApiCommunication:
             query_string = query_string + "&private=1"
 
         url = (
-            self._endpoint[: -len(self._api_handler.api_url)]
+            self._endpoint[: -len(self._api_handler.API_PATH)]
             + self.KEYSTORE
             + query_string
         )
