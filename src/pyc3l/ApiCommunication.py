@@ -251,7 +251,7 @@ class ApiCommunication:
         if r.status_code != 200:
             raise Exception("Error while contacting the API:" + str(r.status_code))
         response_parsed = r.json()
-        return response_parsed, r
+        return response_parsed
 
     def encryptTransactionMessage(
         self, plain_text, **kwargs
@@ -259,7 +259,7 @@ class ApiCommunication:
         if "public_message_key" in kwargs:
             public_message_key = kwargs["public_message_key"]
         elif "address" in kwargs:
-            response, r = self.getMessageKeys(kwargs["address"], False)
+            response = self.getMessageKeys(kwargs["address"], False)
             if "public_message_key" not in response:
                 logger.warn("No message key for account %s", kwargs["address"])
                 return "", ""
