@@ -253,9 +253,8 @@ class ApiCommunication:
         response_parsed = r.json()
         return response_parsed
 
-    def encryptTransactionMessage(
-        self, plain_text, **kwargs
-    ):  # if public_message_key is present use it if not get the key from the address
+    def encryptTransactionMessage(self, plain_text, **kwargs):
+        # if public_message_key is present use it if not get the key from the address
         if "public_message_key" in kwargs:
             public_message_key = kwargs["public_message_key"]
         elif "address" in kwargs:
@@ -270,9 +269,8 @@ class ApiCommunication:
         ciphered = EncryptMessage(public_message_key, plain_text)
         return ciphered, public_message_key
 
-    def decrypteTransactionMessage(
-        self, ciphered, **kwargs
-    ):  # if private_message_key is present use it if not get the key from the address and private_key
+    def decryptTransactionMessage(self, ciphered, **kwargs):
+        # if private_message_key is present use it if not get the key from the address and private_key
         if "private_message_key" in kwargs:
             private_message_key = kwargs["private_message_key"]
         elif "address" in kwargs and "private_key" in kwargs:
