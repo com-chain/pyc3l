@@ -260,7 +260,7 @@ class ApiCommunication:
             public_message_key = kwargs["public_message_key"]
         elif "address" in kwargs:
             response, r = self.getMessageKeys(kwargs["address"], False)
-            if not "public_message_key" in response:
+            if "public_message_key" not in response:
                 logger.warn("No message key for account %s", kwargs["address"])
                 return "", ""
             public_message_key = response["public_message_key"]
@@ -277,7 +277,7 @@ class ApiCommunication:
             private_message_key = kwargs["private_message_key"]
         elif "address" in kwargs and "private_key" in kwargs:
             response, r = self.getMessageKeys(kwargs["address"], True)
-            if not "private_message_key" in response:
+            if "private_message_key" not in response:
                 logger.warn("No message key for account %s", kwargs["address"])
                 return "", ""
             private_message_key = DecryptMessage(
