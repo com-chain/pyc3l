@@ -131,6 +131,12 @@ class ApiCommunication:
 
         r = requests.post(url=self._endpoint, data=data)
         response_parsed = r.json()
+        ## XXXvlab: seems to need to be parsed twice (confirmed upon
+        ## reading the code of the comchain API).
+        if isinstance(response_parsed, str):
+            import json
+
+            response_parsed = json.loads(response_parsed)
         return response_parsed["transaction"]["blockNumber"]
 
     def getNumericalInfo(
