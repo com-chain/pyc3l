@@ -70,11 +70,11 @@ def callNumericInfo(api, contract, function, address, divider=100.0):
 
 
 class ApiCommunication:
-    def __init__(self, api_handler, server):
+    def __init__(self, api_handler, currency_name):
         self._api_handler = api_handler
-        self._server = server
+        self._currency_name = currency_name
         self._contract_1, self._contract_2 = self._api_handler.getServerContract(
-            self._server
+            currency_name
         )
         self._endpoint = self._api_handler.getApiEndpoint()
         self._current_block = ""
@@ -168,7 +168,7 @@ class ApiCommunication:
                 "The provided Admin Account with address "
                 + admin_address
                 + " is not an active admin on server "
-                + self._server
+                + self._currency_name
                 + " ("
                 + self._contract_1
                 + ")"
@@ -428,7 +428,7 @@ class ApiCommunication:
                 "The sender wallet "
                 + sender_account.address
                 + " is locked on server "
-                + self._server
+                + self._currency_name
                 + " ("
                 + self._contract_1
                 + ") and therefore cannot initiate a transfer."
@@ -440,7 +440,7 @@ class ApiCommunication:
                 "The sender wallet "
                 + sender_account.address
                 + " has an insuficient Nant balance on server "
-                + self._server
+                + self._currency_name
                 + " ("
                 + self._contract_1
                 + ") to complete this transfer."
@@ -453,7 +453,7 @@ class ApiCommunication:
                 "The destination wallet "
                 + dest_address
                 + " is locked on server "
-                + self._server
+                + self._currency_name
                 + " ("
                 + self._contract_
                 + +") and therefore cannot recieve a transfer."
@@ -468,10 +468,10 @@ class ApiCommunication:
         logger.info(
             "Transferring %s nantissed %s from wallet %s to target wallet %s on server %s",
             amount,
-            self._server,
+            self._currency_name,
             sender_account.address,
             dest_address,
-            "%s(%s, %s)" % (self._server, self._contract_1, self._contract_2),
+            "%s(%s, %s)" % (self._currency_name, self._contract_1, self._contract_2),
         )
         return self.sendTransaction(
             self.NANT_TRANSFERT + data,
@@ -517,7 +517,7 @@ class ApiCommunication:
                 "The sender wallet "
                 + sender_account.address
                 + " is locked on server "
-                + self._server
+                + self._currency_name
                 + " ("
                 + self._contract_1
                 + ") and therefore cannot initiate a transfer."
@@ -529,7 +529,7 @@ class ApiCommunication:
                 "The sender wallet "
                 + sender_account.address
                 + " has an insuficient CM balance on server "
-                + self._server
+                + self._currency_name
                 + " ("
                 + self._contract_1
                 + ") to complete this transfer."
@@ -542,7 +542,7 @@ class ApiCommunication:
                 "The destination wallet "
                 + dest_address
                 + " is locked on server "
-                + self._server
+                + self._currency_name
                 + " ("
                 + self._contract_1
                 + ") and therefore cannot recieve a transfer."
@@ -557,10 +557,10 @@ class ApiCommunication:
         logger.info(
             "Transferring %s mutual credit %s from wallet %s to target wallet %s on server %s",
             amount,
-            self._server,
+            self._currency_name,
             sender_account.address,
             dest_address,
-            "%s(%s, %s)" % (self._server, self._contract_1, self._contract_2),
+            "%s(%s, %s)" % (self._currency_name, self._contract_1, self._contract_2),
         )
 
         return self.sendTransaction(
@@ -620,7 +620,7 @@ class ApiCommunication:
             logger.info(
                 "Locking/unlocking the wallet %s on server %s (%s)",
                 address,
-                self._server,
+                self._currency_name,
                 self._contract_1,
             )
             return self.sendTransaction(self.ACCOUNT_PARAM + data, admin_account)
@@ -646,7 +646,7 @@ class ApiCommunication:
             logger.warn(
                 "The target wallet %s is locked on server %s (%s)",
                 address,
-                self._server,
+                self._currency_name,
                 self._contract_1,
             )
 
@@ -668,7 +668,7 @@ class ApiCommunication:
             "Pledging %s to target wallet %s on server %s (%s) through end-point %s",
             amount,
             address,
-            self._server,
+            self._currency_name,
             self._contract_1,
             self._endpoint,
         )
