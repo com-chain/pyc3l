@@ -9,11 +9,6 @@ from .ApiHandling import ApiHandling, Endpoint, APIError
 logger = logging.getLogger(__name__)
 
 
-class objectview(object):
-    def __init__(self, d):
-        self.__dict__ = d
-
-
 def encodeNumber(number):
     if number < 0:
         return hex(16**64 + number)[2:].zfill(64)
@@ -553,10 +548,10 @@ class ApiCommunication:
 
         if lock and status == 0:
             logger.info("The wallet %s is already locked", address)
-            return objectview({"text": "N.A."})
+            return None
         elif not lock and status == 1:
             logger.info("The wallet %s is already unlocked", address)
-            return objectview({"text": "N.A."})
+            return None
         else:
 
             # Get wallet infos
