@@ -1,10 +1,10 @@
-import requests
 from web3.eth import Eth
 
 import codecs
 import logging
 
 from .CryptoAsim import EncryptMessage, DecryptMessage
+from .ApiHandling import ApiHandling, Endpoint, APIError
 
 logger = logging.getLogger(__name__)
 
@@ -52,35 +52,33 @@ def buildInfoData(function, address):
     return function + address.zfill(64)
 
 
-def callNumericInfo(api, contract, function, address, divider=100.0):
+def callNumericInfo(endpoint, contract, function, address, divider=100.0):
     data = {
         "ethCall[data]": buildInfoData(function, address),
         "ethCall[to]": contract,
     }
-    r = requests.post(url=api, data=data)
-    if r.status_code != 200:
-        raise Exception(
-            "Error while contacting the API(" + api + "):" + str(r.status_code)
-        )
-    response_parsed = r.json()
-    if not response_parsed["error"]:
-        return decodeNumber(response_parsed["data"]) / divider
-    else:
+    try:
+        r = endpoint.api.post(data=data)
+    except APIError:
         return -1
+    return decodeNumber(r) / divider
 
 
 class ApiCommunication:
-    def __init__(self, api_handler, currency_name):
-        self._api_handler = api_handler
+    def __init__(self, currency_name, endpoint=None):
         self._currency_name = currency_name
-        self._contract_1, self._contract_2 = self._api_handler.getServerContract(
-            currency_name
-        )
-        self._endpoint = self._api_handler.getApiEndpoint()
-        self._current_block = ""
-        self._additional_nonce = 0
 
-        self.KEYSTORE = "/keys.php"
+        self._current_block = 0
+        self._additional_nonce = 0
+        self._metadata = None
+
+        if endpoint:
+            logger.info(f"endpoint: {endpoint} (fixed)")
+            self._endpoint = Endpoint(endpoint)
+            self._endpoint_resolver = None
+        else:
+            self._endpoint = None
+            self._endpoint_resolver = ApiHandling()
 
         # Functions
         # Consultation
@@ -104,63 +102,61 @@ class ApiCommunication:
         self.NANT_TRANSFERT = "0xa5f7c148"
         self.CM_TRANSFERT = "0x60ca9c4c"
 
-    def resetApis(self, api_end_point="", use_new=False):
+    @property
+    def endpoint(self):
+        if self._endpoint is None:
+            self._endpoint = self._endpoint_resolver.endpoint
+            logger.info(f"endpoint: {self._endpoint} (elected)")
+        return self._endpoint
 
-        # get the endpoint
-        if len(api_end_point) != 0:
-            self._endpoint = api_end_point
-        elif use_new:
-            self._endpoint = self._api_handler.getApiEndpoint()
-
-    def getBlockNumber(self):
-        r = requests.post(self._endpoint)
-        if r.status_code != 200:
-            raise Exception(
-                "Error while contacting the API("
-                + self._endpoint
-                + "):"
-                + str(r.status_code)
+    @property
+    def metadata(self):
+        if self._metadata is None:
+            ipfs_endpoint = (
+                self._endpoint_resolver.ipfs_endpoint
+                if self._endpoint_resolver
+                else self.endpoint
             )
-        return r.text
+            self._metadata = ipfs_endpoint.currency_data(self._currency_name)
+        return self._metadata
 
-    def getTransactionBLock(self, transaction_hash, api_end_point=""):
-        if len(api_end_point) != 0:
-            self._endpoint = api_end_point
-
-        data = {"hash": transaction_hash}
-
-        r = requests.post(url=self._endpoint, data=data)
-        response_parsed = r.json()
-        ## XXXvlab: seems to need to be parsed twice (confirmed upon
-        ## reading the code of the comchain API).
-        if isinstance(response_parsed, str):
-            import json
-
-            response_parsed = json.loads(response_parsed)
-        return response_parsed["transaction"]["blockNumber"]
-
-    def getNumericalInfo(
-        self, address_to_check, function, api_end_point="", divider=100.0, contract_id=1
-    ):
-        self.resetApis(api_end_point=api_end_point, use_new=False)
-        if contract_id == 2:
-            contract = self._contract_2
-        else:
-            contract = self._contract_1
-
-        return callNumericInfo(
-            self._endpoint, contract, function, address_to_check, divider
+    @property
+    def contracts(self):
+        server = self.metadata["server"]
+        return (
+            server["contract_1"],
+            server["contract_2"],
         )
 
-    def getTrInfos(self, address, api_end_point=""):
-        if len(api_end_point) != 0:
-            self._endpoint = api_end_point
+    def getBlockNumber(self):
+        return self.endpoint.api.post()
 
-        data = {"txdata": address}
+    def getTransactionBLock(self, transaction_hash):
+        data = {"hash": transaction_hash}
 
-        r = requests.post(url=self._endpoint, data=data)
-        response_parsed = r.json()
-        return response_parsed["data"]
+        r = self.endpoint.api.post(data=data)
+        ## XXXvlab: seems to need to be parsed twice (confirmed upon
+        ## reading the code of the comchain API).
+        if isinstance(r, str):
+            import json
+
+            r = json.loads(r)
+        return r["transaction"]["blockNumber"]
+
+    def getNumericalInfo(
+        self, address_to_check, function, divider=100.0, contract_id=1
+    ):
+        if contract_id == 2:
+            contract = self.contracts[1]
+        else:
+            contract = self.contracts[0]
+
+        return callNumericInfo(
+            self.endpoint, contract, function, address_to_check, divider
+        )
+
+    def getTrInfos(self, address):
+        return self.endpoint.api.post(data={"txdata": address})
 
     def checkAdmin(self, admin_address):
         if not self.getAccountIsValidAdmin(admin_address):
@@ -170,7 +166,7 @@ class ApiCommunication:
                 + " is not an active admin on server "
                 + self._currency_name
                 + " ("
-                + self._contract_1
+                + self.contracts[0]
                 + ")"
             )
 
@@ -181,15 +177,15 @@ class ApiCommunication:
                 + " has not enough gas."
             )
 
-    def hasChangedBlock(self, do_reset=False, endpoint=""):
-        new_current_block = self._api_handler.getCurrentBlock(endpoint)
+    def hasChangedBlock(self, do_reset=False):
+        new_current_block = self.getBlockNumber()
         res = new_current_block != self._current_block
         if do_reset:
             self._current_block = new_current_block
         return res
 
-    def registerCurrentBlock(self, endpoint=""):
-        self.hasChangedBlock(do_reset=True, endpoint=endpoint)
+    def registerCurrentBlock(self):
+        self.hasChangedBlock(do_reset=True)
 
     def updateNonce(self, nonce):
         if not self.hasChangedBlock(do_reset=True):
@@ -210,9 +206,9 @@ class ApiCommunication:
         tr_infos = self.getTrInfos(admin_account.address)
 
         if contract_id == 2:
-            contract = self._contract_2
+            contract = self.contracts[1]
         else:
-            contract = self._contract_1
+            contract = self.contracts[0]
 
         transaction = {
             "to": contract,
@@ -236,28 +232,14 @@ class ApiCommunication:
         if ciphered_message_to != "":
             raw_tx["memo_to"] = ciphered_message_to
 
-        r = requests.post(url=self._endpoint, data=raw_tx)
-        if r.status_code != 200:
-            raise Exception("Error while contacting the API:" + str(r.status_code))
-        response_parsed = r.json()
-        return response_parsed["data"], r
+        return self.endpoint.api.post(data=raw_tx)
 
     ############################### messages with transaction handling
     def getMessageKeys(self, address, with_private):
-        query_string = "?addr=" + address
+        params = {"addr": address}
         if with_private:
-            query_string = query_string + "&private=1"
-
-        url = (
-            self._endpoint[: -len(self._api_handler.API_PATH)]
-            + self.KEYSTORE
-            + query_string
-        )
-        r = requests.get(url=url)
-        if r.status_code != 200:
-            raise Exception("Error while contacting the API:" + str(r.status_code))
-        response_parsed = r.json()
-        return response_parsed
+            params["private"] = 1
+        return self.endpoint.keys.get(params=params)
 
     def encryptTransactionMessage(self, plain_text, **kwargs):
         # if public_message_key is present use it if not get the key from the address
@@ -298,94 +280,81 @@ class ApiCommunication:
 
     ############################### High level Functions
 
-    def getAccountType(self, address_to_check, api_end_point=""):
+    def getAccountType(self, address_to_check):
         return int(
             self.getNumericalInfo(
                 address_to_check,
                 self.ACCOUNT_TYPE,
-                api_end_point=api_end_point,
                 divider=1,
                 contract_id=1,
             )
         )
 
-    def getAccountStatus(self, address_to_check, api_end_point=""):
+    def getAccountStatus(self, address_to_check):
         return int(
             self.getNumericalInfo(
                 address_to_check,
                 self.ACCOUNT_STATUS,
-                api_end_point=api_end_point,
                 divider=1,
                 contract_id=1,
             )
         )
 
-    def getAccountIsValidAdmin(self, address_to_check, api_end_point=""):
+    def getAccountIsValidAdmin(self, address_to_check):
         return (
-            self.getAccountType(address_to_check, api_end_point=api_end_point) == 2
-            and self.getAccountStatus(address_to_check, api_end_point=api_end_point)
-            == 1
+            self.getAccountType(address_to_check) == 2
+            and self.getAccountStatus(address_to_check) == 1
         )
 
-    def getAccountIsOwner(self, address_to_check, api_end_point=""):
+    def getAccountIsOwner(self, address_to_check):
         return int(
             self.getNumericalInfo(
                 address_to_check,
                 self.ACCOUNT_IS_OWNER,
-                api_end_point=api_end_point,
                 divider=1,
                 contract_id=1,
             )
         )
 
-    def getAccountHasEnoughGas(
-        self, address_to_check, api_end_point="", min_gas=5000000
-    ):
-        return (
-            int(self.getTrInfos(address_to_check, api_end_point)["balance"]) > min_gas
-        )
+    def getAccountHasEnoughGas(self, address_to_check, min_gas=5000000):
+        return int(self.getTrInfos(address_to_check)["balance"]) > min_gas
 
-    def getAccountGlobalBalance(self, address_to_check, api_end_point=""):
+    def getAccountGlobalBalance(self, address_to_check):
         return self.getNumericalInfo(
             address_to_check,
             self.GLOBAL_BALANCE,
-            api_end_point=api_end_point,
             divider=100.0,
             contract_id=1,
         )
 
-    def getAccountNantBalance(self, address_to_check, api_end_point=""):
+    def getAccountNantBalance(self, address_to_check):
         return self.getNumericalInfo(
             address_to_check,
             self.NANT_BALANCE,
-            api_end_point=api_end_point,
             divider=100.0,
             contract_id=1,
         )
 
-    def getAccountCMBalance(self, address_to_check, api_end_point=""):
+    def getAccountCMBalance(self, address_to_check):
         return self.getNumericalInfo(
             address_to_check,
             self.CM_BALANCE,
-            api_end_point=api_end_point,
             divider=100.0,
             contract_id=1,
         )
 
-    def getAccountCMLimitMaximum(self, address_to_check, api_end_point=""):
+    def getAccountCMLimitMaximum(self, address_to_check):
         return self.getNumericalInfo(
             address_to_check,
             self.ACCOUNT_CM_LIMIT_P,
-            api_end_point=api_end_point,
             divider=100.0,
             contract_id=1,
         )
 
-    def getAccountCMLimitMinimum(self, address_to_check, api_end_point=""):
+    def getAccountCMLimitMinimum(self, address_to_check):
         return self.getNumericalInfo(
             address_to_check,
             self.ACCOUNT_CM_LIMIT_M,
-            api_end_point=api_end_point,
             divider=100.0,
             contract_id=1,
         )
@@ -402,8 +371,6 @@ class ApiCommunication:
         amount (double): amount (in the current Currency) to be transfered from the sender wallet to the destination wallet
 
         """
-
-        self.resetApis(use_new=True)
 
         # prepare messages
         if "message_from" in kwargs and kwargs["message_from"] != "":
@@ -430,7 +397,7 @@ class ApiCommunication:
                 + " is locked on server "
                 + self._currency_name
                 + " ("
-                + self._contract_1
+                + self.contracts[0]
                 + ") and therefore cannot initiate a transfer."
             )
 
@@ -442,7 +409,7 @@ class ApiCommunication:
                 + " has an insuficient Nant balance on server "
                 + self._currency_name
                 + " ("
-                + self._contract_1
+                + self.contracts[0]
                 + ") to complete this transfer."
             )
 
@@ -455,8 +422,8 @@ class ApiCommunication:
                 + " is locked on server "
                 + self._currency_name
                 + " ("
-                + self._contract_
-                + +") and therefore cannot recieve a transfer."
+                + self.contracts[0]
+                + ") and therefore cannot receive a transfer."
             )
 
         # Prepare data
@@ -471,7 +438,7 @@ class ApiCommunication:
             self._currency_name,
             sender_account.address,
             dest_address,
-            "%s(%s, %s)" % (self._currency_name, self._contract_1, self._contract_2),
+            "%s(%s, %s)" % (self._currency_name, self.contracts[0], self.contracts[1]),
         )
         return self.sendTransaction(
             self.NANT_TRANSFERT + data,
@@ -492,9 +459,6 @@ class ApiCommunication:
         amount (double): amount (in the current Currency) to be transfered from the sender wallet to the destination wallet
 
         """
-        # setup the endpoint
-        self.resetApis(use_new=True)
-
         # prepare messages
         if "message_from" in kwargs and kwargs["message_from"] != "":
             ciphered_message_from, public_key = self.encryptTransactionMessage(
@@ -519,7 +483,7 @@ class ApiCommunication:
                 + " is locked on server "
                 + self._currency_name
                 + " ("
-                + self._contract_1
+                + self.contracts[0]
                 + ") and therefore cannot initiate a transfer."
             )
 
@@ -531,7 +495,7 @@ class ApiCommunication:
                 + " has an insuficient CM balance on server "
                 + self._currency_name
                 + " ("
-                + self._contract_1
+                + self.contracts[0]
                 + ") to complete this transfer."
             )
 
@@ -544,7 +508,7 @@ class ApiCommunication:
                 + " is locked on server "
                 + self._currency_name
                 + " ("
-                + self._contract_1
+                + self.contracts[0]
                 + ") and therefore cannot recieve a transfer."
             )
 
@@ -560,7 +524,7 @@ class ApiCommunication:
             self._currency_name,
             sender_account.address,
             dest_address,
-            "%s(%s, %s)" % (self._currency_name, self._contract_1, self._contract_2),
+            "%s(%s, %s)" % (self._currency_name, self.contracts[0], self.contracts[1]),
         )
 
         return self.sendTransaction(
@@ -581,9 +545,6 @@ class ApiCommunication:
         lock (bool): if True, lock the wallet, if False unlock it
 
         """
-        # setup the endpoint
-        self.resetApis(use_new=True)
-
         # Check the admin
         self.checkAdmin(admin_account.address)
 
@@ -592,10 +553,10 @@ class ApiCommunication:
 
         if lock and status == 0:
             logger.info("The wallet %s is already locked", address)
-            return "", objectview({"text": "N.A."})
+            return objectview({"text": "N.A."})
         elif not lock and status == 1:
             logger.info("The wallet %s is already unlocked", address)
-            return "", objectview({"text": "N.A."})
+            return objectview({"text": "N.A."})
         else:
 
             # Get wallet infos
@@ -621,7 +582,7 @@ class ApiCommunication:
                 "Locking/unlocking the wallet %s on server %s (%s)",
                 address,
                 self._currency_name,
-                self._contract_1,
+                self.contracts[0],
             )
             return self.sendTransaction(self.ACCOUNT_PARAM + data, admin_account)
 
@@ -634,9 +595,6 @@ class ApiCommunication:
         amount (double): amount (in the current Currency) to be pledged to the wallet
 
         """
-        # setup the endpoint
-        self.resetApis(use_new=True)
-
         # Check the admin
         self.checkAdmin(admin_account.address)
 
@@ -647,7 +605,7 @@ class ApiCommunication:
                 "The target wallet %s is locked on server %s (%s)",
                 address,
                 self._currency_name,
-                self._contract_1,
+                self.contracts[0],
             )
 
         # encode message if any
@@ -669,8 +627,8 @@ class ApiCommunication:
             amount,
             address,
             self._currency_name,
-            self._contract_1,
-            self._endpoint,
+            self.contracts[0],
+            self.endpoint,
         )
         return self.sendTransaction(
             self.PLEDGE + data, admin_account, "", ciphered_message_to

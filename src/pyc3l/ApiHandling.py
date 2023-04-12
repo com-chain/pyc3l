@@ -9,17 +9,153 @@ import os
 import shutil
 import traceback
 import time
+import itertools
 
 from contextlib import closing
 
 logger = logging.getLogger(__name__)
 
 
-class ApiHandling:
+class HTTPError(Exception): pass
 
-    IPFS_CONFIG_PATH = "/ipns/QmaAAZor2uLKnrzGCwyXTSwogJqmPjJgvpYgpmtz5XcSmR/configs/"
-    IPFS_NODE_LIST_PATH = "/ipns/QmcRWARTpuEf9E87cdA4FfjBkv7rKTJyfvsLFTzXsGATbL"
-    API_PATH = "/api.php"
+class APIError(Exception): pass
+
+
+class BaseEndpoint(object):
+    """Simple request shortcut
+
+    This object keeps the base url of an endpoint and allows
+    to call `requests` by specifying only the `path` part:
+
+    Let's setup the mock to see how it calls `requests`:
+
+        >>> import minimock
+        >>> minimock.mock('requests.get')
+        >>> minimock.mock('requests.post')
+
+    Instantiate by specifying the base url:
+
+        >>> e = BaseEndpoint('http://example.com')
+        >>> e.get('/path', 1, 2, foo="bar")
+        Called requests.get('http://example.com/path', 1, 2, foo='bar')
+        >>> e.post('/path', 1, 2, foo="bar")
+        Called requests.post('http://example.com/path', 1, 2, foo='bar')
+
+    We can see that positional arguments and keyword arguments are
+    correctly sent to `requests.*` methods.
+
+        >>> minimock.restore()
+
+    """
+
+    def __init__(self, url):
+        self._url = url
+
+    def __getattr__(self, label):
+        if label not in ["get", "post"]:
+            raise AttributeError()
+
+        def r(*args, **kwargs):
+            if len(args):
+                args = list(args)
+                args[0] = f"{self._url}{args[0]}"
+            else:
+                args = [f"{self._url}"]
+            logger.debug("Request %s %s %r" % (
+                label.upper(),
+                args[0],
+                kwargs
+            ))
+            res = getattr(requests, label)(*args, **kwargs)
+            logger.debug("  Response [%s]: %d bytes" % (
+                res.status_code,
+                len(res.text),
+            ))
+            if res.status_code != 200:
+                raise HTTPError("%s %s ERROR (%s)" % (
+                    label.upper(),
+                    args[0],
+                    res.status_code
+                    ))
+            try:
+                data = res.json()
+            except Exception:
+                raise Exception("%s %s ERROR (Not JSON data)" % (
+                    label.upper(),
+                    self._url,
+                ))
+
+            if not isinstance(data, dict):
+                return data
+
+            if data.get("error", False):
+                raise APIError(f"API Call failed with message: {data['msg']}")
+            if "data" in data:
+                return data["data"]
+            return data
+
+        return r
+
+
+class Endpoint(BaseEndpoint):
+
+    URLS = {
+        "api": "/api.php",
+        "config": "/ipns/QmaAAZor2uLKnrzGCwyXTSwogJqmPjJgvpYgpmtz5XcSmR/configs/",
+        "endpoint_list": "/ipns/QmcRWARTpuEf9E87cdA4FfjBkv7rKTJyfvsLFTzXsGATbL",
+        "keys": "/keys.php"
+    }
+
+    def __init__(self, url):
+        self._url = url
+
+    def __getattr__(self, label):
+        if label in ["get", "post"]:
+            return super(Endpoint, self).__getattr__(label)
+        if label in self.URLS.keys():
+            return BaseEndpoint(f"{self._url}{self.URLS[label]}")
+        raise AttributeError()
+
+    def currency_data(self, currency):
+        return self.config.get(f"{currency}.json?_={datetime.datetime.now()}")
+
+    def __repr__(self):
+        return f"<{self.__class__.__name__} {self._url!r}>"
+
+    def __str__(self):
+        return self._url
+
+    def __hash__(self):
+        return hash(self._url)
+
+    def __eq__(self, value):
+        return isinstance(value, Endpoint) and self._url == value._url
+
+
+def random_picker(elts):
+    """Iterator giving endless random pick in given set of elts
+
+    Don't forget to set the seed if you expect to give you a different
+    set after recreating the iterator.
+
+    """
+    while True:
+        yield random.choice(elts)
+
+
+def first(elts, predicate):
+    return next(filter(predicate, elts))
+
+
+def first_pick(elts, predicate, max_retries=20):
+    return first(
+        itertools.islice(elts, 0, max_retries),
+        predicate,
+    )
+
+
+class ApiHandling(object):
+
     DEFAULT_ENDPOINTS = [
         "https://node-cc-001.cchosting.org",
         "https://node-001.cchosting.org",
@@ -29,43 +165,51 @@ class ApiHandling:
     ]
     UPDATE_INTERVAL = 60 * 15  ## in sec
 
-    def __init__(self, endpoint_file=None):
-        """Constructor for this ApiHandling."""
+    def __init__(self, endpoint_file=None, max_retries=20):
         self._store = (
             SimpleFileStore(endpoint_file)
             if endpoint_file
             else StateFileStore("pyc3l", "endpoints.txt")
         )
-        self._endpoints = None  ## cache and lazy loading
+        self._mtime = 0  ## cache and lazy loading
+        self._max_retries = max_retries
+        self._endpoints = None
 
     @property
     def endpoints(self):
         if not self._endpoints:
-            endpoints, mtime = self._load()
-            if endpoints is None:
-                endpoints = self.DEFAULT_ENDPOINTS
-            if time.time() - mtime > self.UPDATE_INTERVAL:
-                self._update(force=True)
-                endpoints = self._load()[0]
-            self._endpoints = endpoints
+            self._endpoints, self._mtime = self._load()
+        if self._endpoints is None:
+            self._endpoints = set(Endpoint(e) for e in self.DEFAULT_ENDPOINTS)
+        if time.time() - self._mtime < self.UPDATE_INTERVAL:
+            return self._endpoints
+
+        logger.info("endpoint list is obsolete, requesting update of list")
+        if not self._update(force=True):
+            logger.warn("endpoint list update failed, keeping old list")
+
         return self._endpoints
 
     def _update(self, force=False):
-        logger.info("Updating endpoint list")
+        logger.info("updating endpoint list")
         ## Avoid to use self.endpoints for recursivity reasons
-        endpoints = self._endpoints or self._load()[0] or set(self.DEFAULT_ENDPOINTS)
+        endpoints = (
+            self._endpoints
+            or self._load()[0]
+            or set(Endpoint(e) for e in self.DEFAULT_ENDPOINTS)
+        )
         for endpoint in random.sample(list(endpoints), k=len(endpoints)):
             logger.debug("  Try to get endpoint list from %r", endpoint)
-            r = self.request(f"{endpoint}{self.IPFS_NODE_LIST_PATH}")
-            if r is False:
-                continue
+            r = self._safe_req(endpoint.endpoint_list.get)
+            if r is not False:
+                break
 
         if r is False:
             logger.error("Failed to get new endpoint list.")
-            return
+            return False
 
-        logger.info("  Getting endpoint list from %r", endpoint)
-        new_endpoints = set(e[:-1] if e[-1] == "/" else e for e in r.json())
+        logger.info("  Got endpoint list from %r", endpoint)
+        new_endpoints = set(Endpoint(e[:-1] if e[-1] == "/" else e) for e in r)
         modified = endpoints != new_endpoints
         if not force and not modified:
             logger.info("saved endpoint list is already up-to-date.")
@@ -75,80 +219,64 @@ class ApiHandling:
             removed = endpoints - new_endpoints
             added = new_endpoints - endpoints
             msg = "\n".join(
-                ["  - %s" % e for e in removed] + ["  + %s" % e for e in added]
+                sorted(["  - %s" % e for e in removed] + ["  + %s" % e for e in added])
             )
             logger.info("  Updating endpoint list:\n%s", msg)
         else:
             logger.info("  Update endpoint last modification time.")
 
         self._save(new_endpoints)
-        self._endpoints = new_endpoints
+        return True
 
-    def getIPFSEndpoint(self):
-        for nb_try in range(1, 21):
-            endpoint = random.choice(list(self.endpoints))
-            if self.request(f"{endpoint}{self.IPFS_CONFIG_PATH}/ping.json"):
-                return endpoint
-
-        raise Exception("Unable to find a valid ipfs node after %d tries." % nb_try)
-
-    def getCurrentBlock(self, endpoint=None):
-        if not endpoint:
-            endpoint = self.getApiEndpoint()
-        r = requests.get(endpoint + "?_=" + str(datetime.datetime.now()))
-        return r.text
-
-    def getApiEndpoint(self):
-        for nb_try in range(1, 21):
-            endpoint = random.choice(list(self.endpoints))
-            url = f"{endpoint}{self.API_PATH}"
-            if self.request(url):
-                logger.info("Selected endpoint: %r", endpoint)
-                return url
-
-        raise Exception("Unable to find a valid API endpoint after %d tries." % nb_try)
-
-    def getServerContract(self, currency):
-        endpoint = self.getIPFSEndpoint()
-        now = str(datetime.datetime.now())
-        url = f"{endpoint}{self.IPFS_CONFIG_PATH}/{currency}.json?{now}"
-        r = requests.get(url)
-        if r.status_code != 200:
-            raise Exception("Unknown currency " + currency)
-        server_data = r.json()["server"]
-
-        return (
-            server_data["contract_1"],
-            server_data["contract_2"],
+    def _first_pick_endpoints(self, predicate, max_retries):
+        random.seed(time.time())
+        endpoint = first_pick(random_picker(list(self.endpoints)), predicate, max_retries)
+        if endpoint:
+            return endpoint
+        raise Exception(
+            f"No endpoint found able to fullfill predicate after {max_retries} retries."
         )
 
-    def request(self, url):
-        now = str(datetime.datetime.now())
-        url = f"{url}?_={now}"
-        logger.debug("request to %r", url)
+    @property
+    def ipfs_endpoint(self):
+        return self._first_pick_endpoints(
+            lambda e: self._safe_req(e.config.get, "ping.json") is not False, self._max_retries
+        )
+
+    @property
+    def endpoint(self):
+        return self._first_pick_endpoints(
+            lambda e: self._safe_req(e.api.get), self._max_retries
+        )
+
+    def _safe_req(self, method, path=""):
         try:
-            r = requests.get(url)
+            r = method(f"{path}?_={datetime.datetime.now()}")
         except Exception as e:
             logger.warn("request raised exception: %s", e)
-            return False
-        if r.status_code != 200:
-            logger.warn("status %s from %r", str(r.status_code), url)
             return False
         return r
 
     def _save(self, endpoints):
-        self._store.save("\n".join(endpoints))
+        self._store.save("\n".join(["%s" % e for e in endpoints]))
+        self._endpoints = endpoints
+        self._mtime = time.time()
 
     def _load(self):
         saved_data, last_mtime = self._store.load(with_mtime=True)
         if saved_data is None:
             return set(), last_mtime
+        endpoints = set(
+            Endpoint(e[:-1] if e[-1] == "/" else e)
+            for e in saved_data.strip().split("\n")
+        )
         logger.info(
-            "read local list of endpoint, last mtime: %s",
+            "read local list of endpoint: %d endpoints, last mtime: %s",
+            len(endpoints),
             datetime.datetime.utcfromtimestamp(last_mtime).isoformat(),
         )
         return (
-            set([e[:-1] if e[-1] == "/" else e for e in saved_data.split("\n")]),
+            endpoints,
             last_mtime,
         )
 
