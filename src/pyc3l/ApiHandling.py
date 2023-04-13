@@ -89,7 +89,9 @@ class BaseEndpoint(object):
                 return data
 
             if data.get("error", False):
-                raise APIError(f"API Call failed with message: {data['msg']}")
+                if data['msg']:
+                    raise APIError( f"API Call failed with message: {data['msg']}")
+                raise APIError("API Call failed without message")
             if "data" in data:
                 return data["data"]
             return data
