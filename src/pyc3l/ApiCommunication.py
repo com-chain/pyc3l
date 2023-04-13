@@ -120,7 +120,7 @@ class ApiCommunication:
                 if self._endpoint_resolver
                 else self.endpoint
             )
-            self._metadata = ipfs_endpoint.currency_data(self._currency_name)
+            self._metadata = ipfs_endpoint.config.get(f"{self._currency_name}.json")
         return self._metadata
 
     @property
