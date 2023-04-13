@@ -2,6 +2,7 @@ from web3.eth import Eth
 
 import codecs
 import logging
+import time
 
 from .CryptoAsim import EncryptMessage, DecryptMessage
 from .ApiHandling import ApiHandling, Endpoint, APIError
@@ -67,6 +68,7 @@ class ApiCommunication:
         self._additional_nonce = 0
         self._metadata = None
 
+        self._endpoint_last_usage = None
         if endpoint:
             logger.info(f"endpoint: {endpoint} (fixed)")
             self._endpoint = Endpoint(endpoint)
@@ -99,9 +101,15 @@ class ApiCommunication:
 
     @property
     def endpoint(self):
-        if self._endpoint is None:
-            self._endpoint = self._endpoint_resolver.endpoint
-            logger.info(f"endpoint: {self._endpoint} (elected)")
+        if self._endpoint_resolver is not None:
+            now = time.time()
+            if self._endpoint and now - self._endpoint_last_usage > 2 * 60:
+                self._endpoint = None
+                logger.info("Re-selection of an endpoint triggered")
+            self._endpoint_last_usage = now
+            if self._endpoint is None:
+                self._endpoint = self._endpoint_resolver.endpoint
+                logger.info(f"endpoint: {self._endpoint} (elected)")
         return self._endpoint
 
     @property
