@@ -118,9 +118,6 @@ class Endpoint(BaseEndpoint):
             return BaseEndpoint(f"{self._url}{self.URLS[label]}")
         raise AttributeError()
 
-    def currency_data(self, currency):
-        return self.config.get(f"{currency}.json?_={datetime.datetime.now()}")
-
     def __repr__(self):
         return f"<{self.__class__.__name__} {self._url!r}>"
 
