@@ -363,9 +363,8 @@ class ApiCommunication:
         )
 
     ############################### High level Transactions
-    def transfertNant(
-        self, sender_account, dest_address, amount, **kwargs
-    ):  # server="", message_from="", message_to=""):
+    def transfertNant(self, sender_account, dest_address, amount, **kwargs):
+        # message_from="", message_to=""):
         """Transfert Nantissed current Currency (server) from the sender to the destination wallet
 
         Parameters:
@@ -451,9 +450,8 @@ class ApiCommunication:
             2,
         )
 
-    def transfertCM(
-        self, sender_account, dest_address, amount, **kwargs
-    ):  # message_from="", message_to=""):
+    def transfertCM(self, sender_account, dest_address, amount, **kwargs):
+        # message_from="", message_to=""):
         """Transfert Mutual Credit current Currency (server) from the sender to the destination wallet
 
         Parameters:
