@@ -96,8 +96,8 @@ class ApiCommunication:
         self.PLEDGE = "0x6c343eef"
 
         # On contract 2
-        self.NANT_TRANSFERT = "0xa5f7c148"
-        self.CM_TRANSFERT = "0x60ca9c4c"
+        self.NANT_TRANSFER = "0xa5f7c148"
+        self.CM_TRANSFER = "0x60ca9c4c"
 
     @property
     def endpoint(self):
@@ -363,9 +363,9 @@ class ApiCommunication:
         )
 
     ############################### High level Transactions
-    def transfertNant(self, sender_account, dest_address, amount, **kwargs):
+    def transferNant(self, sender_account, dest_address, amount, **kwargs):
         # message_from="", message_to=""):
-        """Transfert Nantissed current Currency (server) from the sender to the destination wallet
+        """Transfer Nantissed current Currency (server) from the sender to the destination wallet
 
         Parameters:
         sender_account (eth_account import::Account): An account with enough balance on the current server. Will sign the transaction
@@ -443,16 +443,16 @@ class ApiCommunication:
             "%s(%s, %s)" % (self._currency_name, self.contracts[0], self.contracts[1]),
         )
         return self.sendTransaction(
-            self.NANT_TRANSFERT + data,
+            self.NANT_TRANSFER + data,
             sender_account,
             ciphered_message_from,
             ciphered_message_to,
             2,
         )
 
-    def transfertCM(self, sender_account, dest_address, amount, **kwargs):
+    def transferCM(self, sender_account, dest_address, amount, **kwargs):
         # message_from="", message_to=""):
-        """Transfert Mutual Credit current Currency (server) from the sender to the destination wallet
+        """Transfer Mutual Credit current Currency (server) from the sender to the destination wallet
 
         Parameters:
         sender_account (eth_account import::Account): An account with enough balance on the current server. Will sign the transaction
@@ -529,7 +529,7 @@ class ApiCommunication:
         )
 
         return self.sendTransaction(
-            self.CM_TRANSFERT + data,
+            self.CM_TRANSFER + data,
             sender_account,
             ciphered_message_from,
             ciphered_message_to,
