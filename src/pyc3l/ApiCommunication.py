@@ -135,6 +135,10 @@ class ApiCommunication:
         return self.endpoint.api.post()
 
     def getTransactionBLock(self, transaction_hash):
+        info = self.getTransactionInfo(transaction_hash)
+        return info["transaction"]["blockNumber"]
+
+    def getTransactionInfo(self, transaction_hash):
         data = {"hash": transaction_hash}
 
         r = self.endpoint.api.post(data=data)
@@ -144,7 +148,7 @@ class ApiCommunication:
             import json
 
             r = json.loads(r)
-        return r["transaction"]["blockNumber"]
+        return r
 
     def getNumericalInfo(
         self, address_to_check, function, divider=100.0, contract_id=1
