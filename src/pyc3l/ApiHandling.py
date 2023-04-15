@@ -21,6 +21,37 @@ class HTTPError(Exception): pass
 class APIError(Exception): pass
 
 
+def urlencode_prepare_dict(dct):
+    """Flattens nested dict to support urlencode
+
+    Non nested dicts are unchanged:
+    
+    >>> urlencode_prepare_dict({"a": 1})
+    {'a': 1}
+
+    But nested dicts will be flatten to be encoded in URL
+    or ``application/x-www-form-urlencode`` POST bodies:
+
+    >>> urlencode_prepare_dict({"a": {"b": 1}})
+    {'a[b]': 1}
+
+    >>> urlencode_prepare_dict({"a": {"b": 1}, "c": 2})
+    {'a[b]': 1, 'c': 2}
+
+    """
+    def flatten_dict(d, parent_key=""):
+        nd = {}
+        for k, v in d.items():
+            new_key = f"{parent_key}[{k}]" if parent_key else k
+            if isinstance(v, dict):
+                nd.update(flatten_dict(v, new_key))
+            else:
+                nd[new_key] = v
+        return nd
+
+    return flatten_dict(dct)
+
+
 class BaseEndpoint(object):
     """Simple request shortcut
 
@@ -66,6 +97,8 @@ class BaseEndpoint(object):
                 args[0],
                 kwargs
             ))
+            if "data" in kwargs:
+                kwargs["data"] = urlencode_prepare_dict(kwargs["data"])
             res = getattr(requests, label)(*args, **kwargs)
             logger.debug("  Response [%s]: %d bytes" % (
                 res.status_code,
