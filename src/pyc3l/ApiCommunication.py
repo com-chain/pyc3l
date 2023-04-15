@@ -1,4 +1,5 @@
 from web3.eth import Eth
+import eth_abi
 
 import codecs
 import logging
@@ -10,24 +11,36 @@ from .ApiHandling import ApiHandling, Endpoint, APIError
 logger = logging.getLogger(__name__)
 
 
+def decode_data(abi_types, data):
+    unique = False
+    if isinstance(abi_types, str):
+        unique = True
+        abi_types = [abi_types]
+    if data.startswith("0x"):
+        data = data[2:]
+
+    if len(data) == 0:
+        return None
+
+    try:
+        data_buffer = bytes.fromhex(data)
+    except ValueError:
+        raise ValueError("Invalid data provided: not a hex string")
+
+    if len(data_buffer) % 32 != 0:
+        raise ValueError("Invalid data provided: data length is not a multiple of 32")
+
+    res = eth_abi.decode(abi_types, data_buffer)
+    if unique:
+        return res[0]
+    return res
+
+
 def encodeNumber(number):
     if number < 0:
         return hex(16**64 + number)[2:].zfill(64)
     else:
         return str(hex(number))[2:].zfill(64)
-
-
-def decodeNumber(hexnumber):
-    res = 0
-    if hexnumber[0].lower() == "f" or (
-        hexnumber[0:2] == "0x" and hexnumber[3].lower() == "f"
-    ):
-        res = -(16**64)
-
-    if hexnumber[0:2] != "0x":
-        hexnumber = "0x" + hexnumber
-
-    return int(hexnumber, 0) + res
 
 
 def encodeAddressForTransaction(address):
@@ -41,7 +54,7 @@ def encodeAddressForTransaction(address):
 
 
 def callNumericInfo(endpoint, contract, fn, address, divider=100.0):
-    return decodeNumber(
+    return decode_data('int256',
         read(endpoint, contract, fn, [address])
     ) / divider
 
