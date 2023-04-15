@@ -40,24 +40,21 @@ def encodeAddressForTransaction(address):
     return full_address.zfill(64)
 
 
-def buildInfoData(function, address):
-    if address.startswith("0x"):
-        address = address[2:]
-    if not function.startswith("0x"):
-        function = "0x" + function
-    return function + address.zfill(64)
-
-
-def callNumericInfo(endpoint, contract, function, address, divider=100.0):
-    data = {
-        "ethCall[data]": buildInfoData(function, address),
-        "ethCall[to]": contract,
-    }
-    try:
-        r = endpoint.api.post(data=data)
-    except APIError:
-        return -1
+def callNumericInfo(endpoint, contract, fn, address, divider=100.0):
+    r = endpoint.api.post(data={
+        "ethCall": get_data_obj(contract, fn, [address])
+    })
     return decodeNumber(r) / divider
+
+
+def get_data_obj(to: str, func: str, values):
+    return {
+        "to": to,
+        "data": func + "".join(
+            (v[2:] if v.startswith("0x") else v).zfill(64)
+            for v in values
+        )
+    }
 
 
 class ApiCommunication:
