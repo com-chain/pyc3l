@@ -2,7 +2,7 @@ import unittest
 from pyc3l.ApiHandling import ApiHandling
 from pyc3l.ApiCommunication import (
     encodeNumber,
-    decodeNumber,
+    decode_data,
     encodeAddressForTransaction,
     buildInfoData
 )
@@ -23,7 +23,7 @@ class test_ApiCommunication(unittest.TestCase):
 
         for encoded, to_encode in ORACLE.items():
             self.assertEqual(encodeNumber(to_encode), encoded)
-            self.assertEqual(to_encode, decodeNumber(encoded))
+            self.assertEqual(to_encode, decode_data('int256', encoded))
 
     def test_encodeAddressForTransaction(self):
 
