@@ -41,11 +41,22 @@ def encodeAddressForTransaction(address):
 
 
 def callNumericInfo(endpoint, contract, fn, address, divider=100.0):
-    r = endpoint.api.post(data={
-        "ethCall": get_data_obj(contract, fn, [address])
-    })
-    return decodeNumber(r) / divider
+    return decodeNumber(
+        read(endpoint, contract, fn, [address])
+    ) / divider
 
+
+def read(endpoint, contract, fn, args):
+    try:
+        return endpoint.api.post(data={
+            "ethCall": get_data_obj(contract, fn, args)
+        })
+    except Exception as e:
+        logger.error(
+            "Unexpected failure of ethCall " +
+            f"contract: {contract}, fn: {fn}, args: {args!r}"
+        )
+        raise e
 
 def get_data_obj(to: str, func: str, values):
     return {
