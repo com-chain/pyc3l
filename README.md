@@ -114,7 +114,7 @@ please check out the guidelines.
 To run the tests::
 
 ```
-python3 -m unittest test.test_ApiCommunication
+hatch run test
 ```
 
 ### Push Request Guidelines
