@@ -49,7 +49,60 @@ pip install git+https://github.com/com-chain/pyc3l@master
 
 ## Usage
 
-TBD
+```python
+from pyc3l import Pyc3l
+
+## Instantiate our interface to Comchain's node
+pyc3l = Pyc3l()
+
+## load your ciphered wallet
+wallet = pyc3l.Wallet.from_json(json_string_wallet)
+
+## unlock your wallet with your password
+wallet.unlock(mypassword)
+
+
+## use the ``wallet`` object to read the blockchain
+
+wallet.IsValidAdmin
+wallet.Status
+
+wallet.GlobalBalance
+wallet.NantBalance
+wallet.CMBalance
+wallet.CMLimitMinimum
+
+wallet.Allowances        ## dict of {address: amount}
+wallet.Requests          ## dict of {address: amount}
+wallet.MyRequests        ## dict of {address: amount}
+wallet.Delegations       ## dict of {address: amount}
+wallet.MyDelegations     ## dict of {address: amount}
+wallet.AcceptedRequests  ## dict of {address: amount}
+wallet.RejectedRequests  ## dict of {address: amount}
+
+
+## use the ``wallet`` object to emit transaction
+
+wallet.enable(address)
+wallet.disable(address)
+
+wallet.pledge(address, amount, amount,  message_from="", message_to="")
+wallet.delegate(address, amount)
+
+wallet.transferNant(address, amount, message_from="", message_to="")
+wallet.transferOnBehalfOf(address_from, address_to, amount, message_from="", message_to="")
+
+
+## Get the currency object
+
+currency = Currency("Lemanopolis")
+## or from wallet:
+currency = wallet.currency
+
+```
+
+Please note that ``pyc3l-cli`` package has a lot of short and simple
+scripts to showcase the usage of the library.
 
 ## Contributing
 
