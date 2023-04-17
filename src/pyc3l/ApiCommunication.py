@@ -608,7 +608,13 @@ class ApiCommunication:
         )
 
     ############################### High level Admin restricted Transactions
-    def lockUnlockAccount(self, admin_account, address, lock=True):
+    def enable(self, admin_account, address):
+        return self._lockUnlockAccount(self, admin_account, address, lock=False)
+
+    def disable(self, admin_account, address):
+        return self._lockUnlockAccount(self, admin_account, address, lock=True)
+
+    def _lockUnlockAccount(self, admin_account, address, lock=True):
         """Lock or unlock an Wallet on the current Currency (server)
 
         Parameters:
@@ -658,7 +664,7 @@ class ApiCommunication:
             )
             return self.sendTransaction(self.ACCOUNT_PARAM + data, admin_account)
 
-    def pledgeAccount(self, admin_account, address, amount, **kwargs):  #  message_to
+    def pledge(self, admin_account, address, amount, **kwargs):
         """Pledge a given amount to a Wallet on the current Currency (server)
 
         Parameters:
