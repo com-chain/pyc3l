@@ -120,6 +120,9 @@ class ApiCommunication:
         self.NANT_TRANSFER = "0xa5f7c148"
         self.CM_TRANSFER = "0x60ca9c4c"
 
+        self.DELEGATE = "0x75741c79"
+        self.TRANSFER_NANT_ON_BEHALF = "0x1b6b1ee5"
+
     @property
     def endpoint(self):
         if self._endpoint_resolver is not None:
@@ -659,3 +662,78 @@ class ApiCommunication:
         return self.sendTransaction(
             self.PLEDGE + data, admin_account, "", ciphered_message_to
         )
+
+    def delegate(self, account, address, amount):
+        """Delegate a given amount of own money to an address
+
+        Parameters:
+        account: The account issuing the delegation
+        address (string): The public address of the wallet to receive delegeation (0x12345... format)
+        amount (double): amount (in the current Currency) to be delegated
+
+        """
+
+        # Prepare data
+        amount_cent = int(100 * amount)
+        data = encodeAddressForTransaction(address)
+        data += encodeNumber(amount_cent)
+
+        # send transaction
+        logger.info(
+            "Delegating %s to target wallet %s on server %s (%s) through end-point %s",
+            amount,
+            address,
+            self._currency_name,
+            self.contracts[0],
+            self.endpoint,
+        )
+        return self.sendTransaction(self.DELEGATE + data, account)
+
+    def transferOnBehalfOf(self, account, address_from, address_to, amount, **kwargs):
+        """Transfer amount money from address_from to address_to
+
+        Note, this requires a delegation to be set up previously
+
+        Parameters:
+        account: The account issuing the order
+        address_from (string): The address of the wallet to take money (0x12345... format)
+        address_to (string): The address of the wallet to send money (0x12345... format)
+        amount (double): amount (in the current Currency) to be transfered
+
+        """
+
+        # Prepare data
+        data = encodeAddressForTransaction(address_from)
+        data += encodeAddressForTransaction(address_to)
+        data += encodeNumber(int(100 * amount))
+
+        # prepare messages
+        if "message_from" in kwargs and kwargs["message_from"] != "":
+            ciphered_message_from, public_key = self.encryptTransactionMessage(
+                kwargs["message_from"], address=address_from
+            )
+        else:
+            ciphered_message_from = ""
+
+        if "message_to" in kwargs and kwargs["message_to"] != "":
+            ciphered_message_to, public_key = self.encryptTransactionMessage(
+                kwargs["message_to"], address=address_to
+            )
+        else:
+            ciphered_message_to = ""
+
+        # send transaction
+        logger.info(
+            "Ask Transfer from %s to %s of %s",
+            address_from,
+            address_to,
+            amount,
+        )
+        return self.sendTransaction(
+            self.TRANSFER_NANT_ON_BEHALF + data,
+            account,
+            ciphered_message_from,
+            ciphered_message_to,
+            2
+        )
+
