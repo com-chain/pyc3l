@@ -226,12 +226,12 @@ class ApiCommunication:
     def sendTransaction(
         self,
         data,
-        admin_account,
+        account,
         ciphered_message_from="",
         ciphered_message_to="",
         contract_id=1,
     ):
-        tr_infos = self.getTrInfos(admin_account.address)
+        tr_infos = self.getTrInfos(account.address)
 
         if contract_id == 2:
             contract = self.contracts[1]
@@ -245,10 +245,10 @@ class ApiCommunication:
             "gasPrice": int(tr_infos["gasprice"], 0),
             "nonce": self.updateNonce(int(tr_infos["nonce"], 0)),
             "data": data,
-            "from": admin_account.address,
+            "from": account.address,
         }
 
-        signed = Eth.account.signTransaction(transaction, admin_account.privateKey)
+        signed = Eth.account.signTransaction(transaction, account.privateKey)
         str_version = (
             "0x" + str(codecs.getencoder("hex_codec")(signed.rawTransaction)[0])[2:-1]
         )
