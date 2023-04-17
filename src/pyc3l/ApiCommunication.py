@@ -4,6 +4,8 @@ import eth_abi
 import codecs
 import logging
 import time
+import collections
+
 
 from .CryptoAsim import EncryptMessage, DecryptMessage
 from .ApiHandling import ApiHandling, Endpoint, APIError
@@ -34,6 +36,19 @@ def decode_data(abi_types, data):
     if unique:
         return res[0]
     return res
+
+
+BCListInfo = collections.namedtuple("BCListInfo", ["count", "map", "amount"])
+
+LIST_FUNCTIONS = {
+    "Allowance": BCListInfo("aa7adb3d", "b545b11f", "dd62ed3e"),
+    "Request": BCListInfo("debb9d28", "726d0a28", "3537d3fa"),
+    "MyRequest": BCListInfo("418d0fd4", "0becf93f", "09a15e43"),
+    "Delegation": BCListInfo("58fb5218", "ca40edf1", "046d3307"),
+    "MyDelegation": BCListInfo("7737784d", "49bce08d", "f24111d2"),
+    "AcceptedRequest": BCListInfo("8d768f84", "59a1921a", "958cde37"),
+    "RejectedRequest": BCListInfo("20cde8fa", "9aa9366e", "eac9dd4d"),
+}
 
 
 def encodeNumber(number):
@@ -79,6 +94,34 @@ def get_data_obj(to: str, func: str, values):
             for v in values
         )
     }
+
+
+def get_amount_for_element(endpoint, contract, fn, caller, element_address):
+    data = read(endpoint, contract, fn, [caller, element_address])
+    return decode_data("int256", data)/100.0
+
+
+def get_element_in_list(endpoint, contract, map_fn, amount_fn, caller_address,
+                        idx, dct, idx_min):
+    if idx < idx_min:
+        return dct
+    ## check that:
+    ## - caller_address is naked
+    ## - pad_left is working as expected
+    data = read(endpoint, contract, map_fn, [
+        caller_address,
+        hex(idx)[2:]
+    ])
+    amount = get_amount_for_element(endpoint, contract, amount_fn, caller_address, data)
+
+    address = "0x" + data[-40:]
+    dct[address] = amount
+    return get_element_in_list(
+        endpoint,
+        contract, map_fn, amount_fn,
+        caller_address, idx - 1, dct, idx_min
+    )
+
 
 
 class ApiCommunication:
@@ -736,4 +779,29 @@ class ApiCommunication:
             ciphered_message_to,
             2
         )
+
+    def __getattr__(self, label):
+        if label.startswith("get") and label.endswith("List"):
+            key = label[3:-4]
+            if key in LIST_FUNCTIONS:
+                list_info = LIST_FUNCTIONS[key]
+                contract = self.contracts[1]
+
+                def get_list_function(address, idx_min=0, idx_max=0):
+                    data = read(self.endpoint, contract,
+                                f"0x{list_info.count}", [address])
+                    count = decode_data('int256', data)
+                    return get_element_in_list(
+                        self.endpoint,
+                        contract,
+                        f"0x{list_info.map}",
+                        f"0x{list_info.amount}",
+                        address,
+                        min(count - 1, idx_max),
+                        {},
+                        idx_min
+                    )
+
+                return get_list_function
+        raise AttributeError(label)
 
