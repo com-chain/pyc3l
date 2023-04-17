@@ -1,10 +1,10 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
 
 [project]
 name = "pyc3l"
-version = "%%version%%"
+dynamic = ["version"]
 authors = [
   { name="Florian Dubath", email="florian@dubath.org" },
 ]
@@ -20,8 +20,48 @@ dependencies = [
   "ecdsa",
   "web3",
   "requests",
-  "eth_account",
+  "minimock [test]",
 ]
 [project.urls]
 "Homepage" = "https://github.com/com-chain/pyc3l"
 "Bug Tracker" = "https://github.com/com-chain/pyc3l/issues"
+
+[tool.hatch.version]
+source = "vcs"
+path = "src/pyc3l/__about__.py"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "_version.py"
+
+[tool.hatch.envs.default]
+dependencies = [
+  "pytest",
+  "pytest-cov",
+]
+[tool.hatch.envs.default.scripts]
+test = "pytest {args}"
+cov = "pytest --cov-report=term-missing --cov-config=pyproject.toml --cov=pyc3l --cov=tests {args}"
+no-cov = "cov --no-cov {args}"
+
+[[tool.hatch.envs.test.matrix]]
+python = ["37", "38", "39", "310", "311"]
+
+[tool.coverage.run]
+branch = true
+parallel = true
+omit = [
+  "src/pyc3l/__about__.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+  "no cov",
+  "if __name__ == .__main__.:",
+  "if TYPE_CHECKING:",
+]
+
+[tool.hatch.build.targets.sdist]
+exclude = [
+  "/.github",
+  "/doc",
+]

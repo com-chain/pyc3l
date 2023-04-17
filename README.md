@@ -20,9 +20,6 @@ using ``pyc3l``:
 
 This code is for python3 and uses:
 
-- eth_account
-- web3
-- ecdsa
 - tkinter
 
 You can check if tkinter is installed: open python3 and type:
@@ -127,7 +124,7 @@ please check out the guidelines.
 To run the tests::
 
 ```
-python3 -m unittest test.test_ApiCommunication
+hatch run test
 ```
 
 ### Push Request Guidelines
