@@ -180,25 +180,6 @@ class ApiCommunication:
             server["contract_2"],
         )
 
-    def getBlockNumber(self):
-        return self.endpoint.api.post()
-
-    def getTransactionBLock(self, transaction_hash):
-        info = self.getTransactionInfo(transaction_hash)
-        return info["transaction"]["blockNumber"]
-
-    def getTransactionInfo(self, transaction_hash):
-        data = {"hash": transaction_hash}
-
-        r = self.endpoint.api.post(data=data)
-        ## XXXvlab: seems to need to be parsed twice (confirmed upon
-        ## reading the code of the comchain API).
-        if isinstance(r, str):
-            import json
-
-            r = json.loads(r)
-        return r
-
     def getNumericalInfo(
         self, address_to_check, function, divider=100.0, contract_id=1
     ):
@@ -210,9 +191,6 @@ class ApiCommunication:
         return callNumericInfo(
             self.endpoint, contract, function, address_to_check, divider
         )
-
-    def getTrInfos(self, address):
-        return self.endpoint.api.post(data={"txdata": address})
 
     def checkAdmin(self, admin_address):
         if not self.getAccountIsValidAdmin(admin_address):
@@ -233,16 +211,6 @@ class ApiCommunication:
                 + " has not enough gas."
             )
 
-    def hasChangedBlock(self, do_reset=False):
-        new_current_block = self.getBlockNumber()
-        res = new_current_block != self._current_block
-        if do_reset:
-            self._current_block = new_current_block
-        return res
-
-    def registerCurrentBlock(self):
-        self.hasChangedBlock(do_reset=True)
-
     def updateNonce(self, nonce):
         if not self.hasChangedBlock(do_reset=True):
             self._additional_nonce = self._additional_nonce + 1
@@ -259,7 +227,7 @@ class ApiCommunication:
         ciphered_message_to="",
         contract_id=1,
     ):
-        tr_infos = self.getTrInfos(account.address)
+        tr_infos = self._pyc3l.getTrInfos(account.address)
 
         if contract_id == 2:
             contract = self.contracts[1]
@@ -373,7 +341,7 @@ class ApiCommunication:
         )
 
     def getAccountHasEnoughGas(self, address_to_check, min_gas=5000000):
-        return int(self.getTrInfos(address_to_check)["balance"]) > min_gas
+        return int(self._pyc3l.getTrInfos(address_to_check)["balance"]) > min_gas
 
     def getAccountGlobalBalance(self, address_to_check):
         return self.getNumericalInfo(
