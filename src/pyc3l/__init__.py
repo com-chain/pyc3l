@@ -57,6 +57,47 @@ class Pyc3l:
             return self._endpoint_resolver.ipfs_endpoint
         return self._endpoint
 
+
+    ## Blockchain operation
+
+    def getBlockNumber(self):
+        return self.endpoint.api.post()
+
+    def getTransactionBlock(self, transaction_hash):
+        info = self.getTransactionInfo(transaction_hash)
+        return info["transaction"]["blockNumber"]
+
+    def getTransactionInfo(self, transaction_hash):
+        data = {"hash": transaction_hash}
+
+        r = self.endpoint.api.post(data=data)
+        ## XXXvlab: seems to need to be parsed twice (confirmed upon
+        ## reading the code of the comchain API).
+        if isinstance(r, str):
+            import json
+
+            r = json.loads(r)
+        return r
+
+    def getTrInfos(self, address):
+        return self.endpoint.api.post(data={"txdata": address})
+
+    def getAccountEthBalance(self, address):
+        return self.endpoint.api.post(data={"balance": address})['balance']
+
+    def hasChangedBlock(self, do_reset=False):
+        new_current_block = self.getBlockNumber()
+        res = new_current_block != self._current_block
+        if do_reset:
+            self._current_block = new_current_block
+        return res
+
+    def registerCurrentBlock(self):
+        self.hasChangedBlock(do_reset=True)
+
+
+    ## Sub-objects
+
     def Currency(pyc3l_instance, name):
         class Pyc3lCurrency(ApiCommunication):
 
@@ -121,17 +162,11 @@ class Pyc3l:
 
             @property
             def data(self):
-                ## XXXvlab: ``getTransactionInfo`` should not be on ``Currency`` objects,
-                ## this shows why: here we have to create a dummy currency just to get
-                ## access to the endpoint api mecanism.
-                return pyc3l_instance.Currency("").getTransactionInfo(self.address)
+                return pyc3l_instance.getTransactionInfo(self.address)
 
             @property
             def block(self):
-                ## XXXvlab: ``getTransactionBLock`` should not be on ``Currency`` objects,
-                ## this shows why: here we have to create a dummy currency just to get
-                ## access to the endpoint api mecanism.
-                return pyc3l_instance.Currency("").getTransactionBLock(self.address)
+                return pyc3l_instance.getTransactionBlock(self.address)
 
             @property
             def pending(self):
