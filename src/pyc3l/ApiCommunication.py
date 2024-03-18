@@ -639,7 +639,8 @@ class ApiCommunication:
 
             # send the transaction
             logger.info(
-                "Locking/unlocking the wallet %s on server %s (%s)",
+                "%s the wallet %s on server %s (%s)",
+                "Locking" if lock else "Unlocking",
                 address,
                 self._currency_name,
                 self.contracts[0],
