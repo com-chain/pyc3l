@@ -123,6 +123,40 @@ def get_element_in_list(endpoint, contract, map_fn, amount_fn, caller_address,
     )
 
 
+CONTRACT_FUNCTIONS = [
+    # First Contract
+    {
+        # Consultation
+        "accountType": "ba99af70",
+        "accountStatus": "61242bdd",
+        "accountIsOwner": "2f54bf6e",
+        "accountCMLimitM": "cc885a65",
+        "accountCMLimitP": "ae7143d6",
+        "globalBalance": "70a08231",
+        "nantBalance": "ae261aba",
+        "cmBalance": "bbc72a17",
+
+        # Transaction
+        "setAccountParam": "848b2592",
+        "pledge": "6c343eef",
+        "delegate": "75741c79",
+    },
+    # Second Contract
+    {
+        "nantTransfer": "a5f7c148",
+        "cmTransfer": "60ca9c4c",
+        "transferNantOnBehalf": "1b6b1ee5",
+    }
+]
+
+def getContractFunctionHex(fn_name):
+    for idx, function_defs in enumerate(CONTRACT_FUNCTIONS):
+        fn = function_defs.get(fn_name, None)
+        if fn:
+            return idx, f"0x{fn}"
+    else:
+        raise ValueError(f"Unknown function {fn_name!r}")
+
 
 class ApiCommunication:
     def __init__(self, currency_name, pyc3l):
@@ -132,31 +166,6 @@ class ApiCommunication:
         self._additional_nonce = 0
         self._metadata = None
         self._pyc3l = pyc3l
-
-        # Functions
-        # Consultation
-        self.ACCOUNT_TYPE = "0xba99af70"
-        self.ACCOUNT_STATUS = "0x61242bdd"
-        self.ACCOUNT_IS_OWNER = "0x2f54bf6e"
-
-        self.ACCOUNT_CM_LIMIT_M = "0xcc885a65"
-        self.ACCOUNT_CM_LIMIT_P = "0xae7143d6"
-
-        self.GLOBAL_BALANCE = "0x70a08231"
-        self.NANT_BALANCE = "0xae261aba"
-        self.CM_BALANCE = "0xbbc72a17"
-
-        # Transaction
-        self.ACCOUNT_PARAM = "0x848b2592"
-
-        self.PLEDGE = "0x6c343eef"
-
-        # On contract 2
-        self.NANT_TRANSFER = "0xa5f7c148"
-        self.CM_TRANSFER = "0x60ca9c4c"
-
-        self.DELEGATE = "0x75741c79"
-        self.TRANSFER_NANT_ON_BEHALF = "0x1b6b1ee5"
 
     @property
     def endpoint(self):
@@ -180,16 +189,12 @@ class ApiCommunication:
             server["contract_2"],
         )
 
-    def getNumericalInfo(
-        self, address, function, divider=100.0, contract_id=1
-    ):
-        if contract_id == 2:
-            contract = self.contracts[1]
-        else:
-            contract = self.contracts[0]
+    def getNumericalInfo(self, address, fn_name, divider=100.0):
+        contract_id, fn_hex = getContractFunctionHex(fn_name)
+        contract = self.contracts[contract_id]
 
         return callNumericInfo(
-            self.endpoint, contract, function, address, divider
+            self.endpoint, contract, fn_hex, address, divider
         )
 
     def checkAdmin(self, address):
@@ -214,19 +219,16 @@ class ApiCommunication:
             return nonce
 
     def sendTransaction(
-        self,
-        data,
-        account,
-        ciphered_message_from="",
-        ciphered_message_to="",
-        contract_id=1,
+            self,
+            fn_name,
+            data,
+            account,
+            ciphered_message_from="",
+            ciphered_message_to="",
     ):
+        contract_id, fn_hex = getContractFunctionHex(fn_name)
+        contract = self.contracts[contract_id]
         tr_infos = self._pyc3l.getTrInfos(account.address)
-
-        if contract_id == 2:
-            contract = self.contracts[1]
-        else:
-            contract = self.contracts[0]
 
         transaction = {
             "to": contract,
@@ -234,7 +236,7 @@ class ApiCommunication:
             "gas": 5000000,
             "gasPrice": int(tr_infos["gasprice"], 0),
             "nonce": self.updateNonce(int(tr_infos["nonce"], 0)),
-            "data": data,
+            "data": fn_hex + data,
             "from": account.address,
         }
 
@@ -302,9 +304,8 @@ class ApiCommunication:
         return int(
             self.getNumericalInfo(
                 address,
-                self.ACCOUNT_TYPE,
+                "accountType",
                 divider=1,
-                contract_id=1,
             )
         )
 
@@ -312,9 +313,8 @@ class ApiCommunication:
         return int(
             self.getNumericalInfo(
                 address,
-                self.ACCOUNT_STATUS,
+                "accountStatus",
                 divider=1,
-                contract_id=1,
             )
         )
 
@@ -328,9 +328,8 @@ class ApiCommunication:
         return int(
             self.getNumericalInfo(
                 address,
-                self.ACCOUNT_IS_OWNER,
+                "accountIsOwner",
                 divider=1,
-                contract_id=1,
             )
         )
 
@@ -340,41 +339,36 @@ class ApiCommunication:
     def getAccountGlobalBalance(self, address):
         return self.getNumericalInfo(
             address,
-            self.GLOBAL_BALANCE,
+            "globalBalance",
             divider=100.0,
-            contract_id=1,
         )
 
     def getAccountNantBalance(self, address):
         return self.getNumericalInfo(
             address,
-            self.NANT_BALANCE,
+            "nantBalance",
             divider=100.0,
-            contract_id=1,
         )
 
     def getAccountCMBalance(self, address):
         return self.getNumericalInfo(
             address,
-            self.CM_BALANCE,
+            "cmBalance",
             divider=100.0,
-            contract_id=1,
         )
 
     def getAccountCMLimitMaximum(self, address):
         return self.getNumericalInfo(
             address,
-            self.ACCOUNT_CM_LIMIT_P,
+            "accountCMLimitP",
             divider=100.0,
-            contract_id=1,
         )
 
     def getAccountCMLimitMinimum(self, address):
         return self.getNumericalInfo(
             address,
-            self.ACCOUNT_CM_LIMIT_M,
+            "accountCMLimitM",
             divider=100.0,
-            contract_id=1,
         )
 
     ############################### High level Transactions
@@ -446,11 +440,11 @@ class ApiCommunication:
             "%s(%s, %s)" % (self._currency_name, self.contracts[0], self.contracts[1]),
         )
         return self.sendTransaction(
-            self.NANT_TRANSFER + data,
+            "nantTransfer",
+            data,
             account,
             ciphered_message_from,
             ciphered_message_to,
-            2,
         )
 
     def transferCM(self, account, dest_address, amount, **kwargs):
@@ -532,11 +526,11 @@ class ApiCommunication:
         )
 
         return self.sendTransaction(
-            self.CM_TRANSFER + data,
+            "cmTransfer",
+            data,
             account,
             ciphered_message_from,
             ciphered_message_to,
-            2,
         )
 
     ############################### High level Admin restricted Transactions
@@ -595,7 +589,7 @@ class ApiCommunication:
                 self._currency_name,
                 self.contracts[0],
             )
-            return self.sendTransaction(self.ACCOUNT_PARAM + data, account)
+            return self.sendTransaction("setAccountParam", data, account)
 
     def pledge(self, account, address, amount, **kwargs):
         """Pledge a given amount to a Wallet on the current Currency (server)
@@ -642,7 +636,7 @@ class ApiCommunication:
             self.endpoint,
         )
         return self.sendTransaction(
-            self.PLEDGE + data, account, "", ciphered_message_to
+            "pledge", data, account, "", ciphered_message_to
         )
 
     def delegate(self, account, address, amount):
@@ -669,7 +663,7 @@ class ApiCommunication:
             self.contracts[0],
             self.endpoint,
         )
-        return self.sendTransaction(self.DELEGATE + data, account)
+        return self.sendTransaction("delegate", data, account)
 
     def transferOnBehalfOf(self, account, address_from, address_to, amount, **kwargs):
         """Transfer amount money from address_from to address_to
@@ -712,11 +706,11 @@ class ApiCommunication:
             amount,
         )
         return self.sendTransaction(
-            self.TRANSFER_NANT_ON_BEHALF + data,
+            "transferNantOnBehalf",
+            data,
             account,
             ciphered_message_from,
             ciphered_message_to,
-            2
         )
 
     def __getattr__(self, label):
