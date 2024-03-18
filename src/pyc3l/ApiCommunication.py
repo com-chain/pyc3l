@@ -125,21 +125,13 @@ def get_element_in_list(endpoint, contract, map_fn, amount_fn, caller_address,
 
 
 class ApiCommunication:
-    def __init__(self, currency_name, endpoint=None):
+    def __init__(self, currency_name, pyc3l):
         self._currency_name = currency_name
 
         self._current_block = 0
         self._additional_nonce = 0
         self._metadata = None
-
-        self._endpoint_last_usage = None
-        if endpoint:
-            logger.info(f"endpoint: {endpoint} (fixed)")
-            self._endpoint = Endpoint(endpoint)
-            self._endpoint_resolver = None
-        else:
-            self._endpoint = None
-            self._endpoint_resolver = ApiHandling()
+        self._pyc3l = pyc3l
 
         # Functions
         # Consultation
@@ -168,26 +160,16 @@ class ApiCommunication:
 
     @property
     def endpoint(self):
-        if self._endpoint_resolver is not None:
-            now = time.time()
-            if self._endpoint and now - self._endpoint_last_usage > 2 * 60:
-                self._endpoint = None
-                logger.info("Re-selection of an endpoint triggered")
-            self._endpoint_last_usage = now
-            if self._endpoint is None:
-                self._endpoint = self._endpoint_resolver.endpoint
-                logger.info(f"endpoint: {self._endpoint} (elected)")
-        return self._endpoint
+        return self._pyc3l.endpoint
+
+    @property
+    def ipfs_endpoint(self):
+        return self._pyc3l.ipfs_endpoint
 
     @property
     def metadata(self):
         if self._metadata is None:
-            ipfs_endpoint = (
-                self._endpoint_resolver.ipfs_endpoint
-                if self._endpoint_resolver
-                else self.endpoint
-            )
-            self._metadata = ipfs_endpoint.config.get(f"{self._currency_name}.json")
+            self._metadata = self._pyc3l.ipfs_endpoint.config.get(f"{self._currency_name}.json")
         return self._metadata
 
     @property

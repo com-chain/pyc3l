@@ -1,8 +1,14 @@
 #
 
+import logging
+import time
+
 from .wallet import Wallet
 from .ApiCommunication import ApiCommunication
-from .ApiHandling import ApiHandling
+from .ApiHandling import ApiHandling, Endpoint
+
+logger = logging.getLogger(__name__)
+
 
 NONE = {}
 
@@ -23,9 +29,35 @@ class Transaction(AddressableObject): pass
 class Pyc3l:
 
     def __init__(self, endpoint=None):
-        self._endpoint = endpoint
+        self._endpoint_last_usage = None
+        if endpoint:
+            logger.info(f"endpoint: {endpoint} (fixed)")
+            self._endpoint = Endpoint(endpoint)
+            self._endpoint_resolver = None
+        else:
+            self._endpoint = None
+            self._endpoint_resolver = ApiHandling()
 
-    def Currency(self, name):
+    @property
+    def endpoint(self):
+        if self._endpoint_resolver is not None:
+            now = time.time()
+            if self._endpoint and now - self._endpoint_last_usage > 2 * 60:
+                self._endpoint = None
+                logger.info("Re-selection of an endpoint triggered")
+            self._endpoint_last_usage = now
+            if self._endpoint is None:
+                self._endpoint = self._endpoint_resolver.endpoint
+                logger.info(f"endpoint: {self._endpoint} (elected)")
+        return self._endpoint
+
+    @property
+    def ipfs_endpoint(self):
+        if self._endpoint_resolver is not None:
+            return self._endpoint_resolver.ipfs_endpoint
+        return self._endpoint
+
+    def Currency(pyc3l_instance, name):
         class Pyc3lCurrency(ApiCommunication):
 
             def Account(pyc3l_currency, address):
@@ -52,7 +84,7 @@ class Pyc3l:
             def symbol(self):
                 return self.metadata["server"]["currencies"]["CUR"]
 
-        return Pyc3lCurrency(name, endpoint=self._endpoint)
+        return Pyc3lCurrency(name, pyc3l_instance)
 
     @property
     def Wallet(pyc3l_instance):
