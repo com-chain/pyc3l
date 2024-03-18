@@ -181,7 +181,7 @@ class ApiCommunication:
         )
 
     def getNumericalInfo(
-        self, address_to_check, function, divider=100.0, contract_id=1
+        self, address, function, divider=100.0, contract_id=1
     ):
         if contract_id == 2:
             contract = self.contracts[1]
@@ -189,26 +189,20 @@ class ApiCommunication:
             contract = self.contracts[0]
 
         return callNumericInfo(
-            self.endpoint, contract, function, address_to_check, divider
+            self.endpoint, contract, function, address, divider
         )
 
-    def checkAdmin(self, admin_address):
-        if not self.getAccountIsValidAdmin(admin_address):
+    def checkAdmin(self, address):
+        if not self.getAccountIsValidAdmin(address):
             raise Exception(
-                "The provided Admin Account with address "
-                + admin_address
-                + " is not an active admin on server "
-                + self._currency_name
-                + " ("
-                + self.contracts[0]
-                + ")"
+                f"The provided account {address} is not an "
+                f"active admin on f{self._currency_name}"
+                f" ({self.contracts[0]})"
             )
 
-        if not self.getAccountHasEnoughGas(admin_address):
+        if not self.getAccountHasEnoughGas(address):
             raise Exception(
-                "The provided Admin Account with address "
-                + admin_address
-                + " has not enough gas."
+                f"The provided account {address} has not enough gas."
             )
 
     def updateNonce(self, nonce):
@@ -304,92 +298,92 @@ class ApiCommunication:
 
     ############################### High level Functions
 
-    def getAccountType(self, address_to_check):
+    def getAccountType(self, address):
         return int(
             self.getNumericalInfo(
-                address_to_check,
+                address,
                 self.ACCOUNT_TYPE,
                 divider=1,
                 contract_id=1,
             )
         )
 
-    def getAccountStatus(self, address_to_check):
+    def getAccountStatus(self, address):
         return int(
             self.getNumericalInfo(
-                address_to_check,
+                address,
                 self.ACCOUNT_STATUS,
                 divider=1,
                 contract_id=1,
             )
         )
 
-    def getAccountIsValidAdmin(self, address_to_check):
+    def getAccountIsValidAdmin(self, address):
         return (
-            self.getAccountType(address_to_check) == 2
-            and self.getAccountStatus(address_to_check) == 1
+            self.getAccountType(address) == 2
+            and self.getAccountStatus(address) == 1
         )
 
-    def getAccountIsOwner(self, address_to_check):
+    def getAccountIsOwner(self, address):
         return int(
             self.getNumericalInfo(
-                address_to_check,
+                address,
                 self.ACCOUNT_IS_OWNER,
                 divider=1,
                 contract_id=1,
             )
         )
 
-    def getAccountHasEnoughGas(self, address_to_check, min_gas=5000000):
-        return int(self._pyc3l.getTrInfos(address_to_check)["balance"]) > min_gas
+    def getAccountHasEnoughGas(self, address, min_gas=5000000):
+        return int(self._pyc3l.getTrInfos(address)["balance"]) > min_gas
 
-    def getAccountGlobalBalance(self, address_to_check):
+    def getAccountGlobalBalance(self, address):
         return self.getNumericalInfo(
-            address_to_check,
+            address,
             self.GLOBAL_BALANCE,
             divider=100.0,
             contract_id=1,
         )
 
-    def getAccountNantBalance(self, address_to_check):
+    def getAccountNantBalance(self, address):
         return self.getNumericalInfo(
-            address_to_check,
+            address,
             self.NANT_BALANCE,
             divider=100.0,
             contract_id=1,
         )
 
-    def getAccountCMBalance(self, address_to_check):
+    def getAccountCMBalance(self, address):
         return self.getNumericalInfo(
-            address_to_check,
+            address,
             self.CM_BALANCE,
             divider=100.0,
             contract_id=1,
         )
 
-    def getAccountCMLimitMaximum(self, address_to_check):
+    def getAccountCMLimitMaximum(self, address):
         return self.getNumericalInfo(
-            address_to_check,
+            address,
             self.ACCOUNT_CM_LIMIT_P,
             divider=100.0,
             contract_id=1,
         )
 
-    def getAccountCMLimitMinimum(self, address_to_check):
+    def getAccountCMLimitMinimum(self, address):
         return self.getNumericalInfo(
-            address_to_check,
+            address,
             self.ACCOUNT_CM_LIMIT_M,
             divider=100.0,
             contract_id=1,
         )
 
     ############################### High level Transactions
-    def transferNant(self, sender_account, dest_address, amount, **kwargs):
+    def transferNant(self, account, dest_address, amount, **kwargs):
         # message_from="", message_to=""):
         """Transfer Nantissed current Currency (server) from the sender to the destination wallet
 
         Parameters:
-        sender_account (eth_account import::Account): An account with enough balance on the current server. Will sign the transaction
+        account (eth_account import::Account): An account with enough balance on the current server. Will sign the transaction
         dest_address (string): The public address of the wallet to be credited (0x12345... format)
         amount (double): amount (in the current Currency) to be transfered from the sender wallet to the destination wallet
 
@@ -399,7 +393,7 @@ class ApiCommunication:
         if "message_from" in kwargs and kwargs["message_from"] != "":
 
             ciphered_message_from, public_key = self.encryptTransactionMessage(
-                kwargs["message_from"], address=sender_account.address
+                kwargs["message_from"], address=account.address
             )
         else:
             ciphered_message_from = ""
@@ -412,41 +406,29 @@ class ApiCommunication:
             ciphered_message_to = ""
 
         # Get sender wallet infos
-        status = self.getAccountStatus(sender_account.address)
+        status = self.getAccountStatus(account.address)
         if status == 0:
             raise Exception(
-                "The sender wallet "
-                + sender_account.address
-                + " is locked on server "
-                + self._currency_name
-                + " ("
-                + self.contracts[0]
-                + ") and therefore cannot initiate a transfer."
+                f"The sender wallet {account.address} is locked "
+                f"on {self._currency_name} ({self.contracts[0]}) "
+                "and therefore cannot initiate a transfer."
             )
 
-        balance = self.getAccountNantBalance(sender_account.address)
+        balance = self.getAccountNantBalance(account.address)
         if balance < amount:
             raise Exception(
-                "The sender wallet "
-                + sender_account.address
-                + " has an insuficient Nant balance on server "
-                + self._currency_name
-                + " ("
-                + self.contracts[0]
-                + ") to complete this transfer."
+                f"The sender wallet {account.address} has an "
+                f"insufficient Nant balance on {self._currency_name} "
+                f"({self.contracts[0]}) to complete this transfer."
             )
 
         # Get destination wallet infos
         status = self.getAccountStatus(dest_address)
         if status == 0:
             raise Exception(
-                "The destination wallet "
-                + dest_address
-                + " is locked on server "
-                + self._currency_name
-                + " ("
-                + self.contracts[0]
-                + ") and therefore cannot receive a transfer."
+                f"The destination wallet {dest_address} is locked on "
+                f"{self._currency_name}  ({self.contracts[0]}) and "
+                "therefore cannot receive a transfer."
             )
 
         # Prepare data
@@ -459,24 +441,24 @@ class ApiCommunication:
             "Transferring %s nantissed %s from wallet %s to target wallet %s on server %s",
             amount,
             self._currency_name,
-            sender_account.address,
+            account.address,
             dest_address,
             "%s(%s, %s)" % (self._currency_name, self.contracts[0], self.contracts[1]),
         )
         return self.sendTransaction(
             self.NANT_TRANSFER + data,
-            sender_account,
+            account,
             ciphered_message_from,
             ciphered_message_to,
             2,
         )
 
-    def transferCM(self, sender_account, dest_address, amount, **kwargs):
+    def transferCM(self, account, dest_address, amount, **kwargs):
         # message_from="", message_to=""):
         """Transfer Mutual Credit current Currency (server) from the sender to the destination wallet
 
         Parameters:
-        sender_account (eth_account import::Account): An account with enough balance on the current server. Will sign the transaction
+        account (eth_account import::Account): An account with enough balance on the current server. Will sign the transaction
         dest_address (string): The public address of the wallet to be credited (0x12345... format)
         amount (double): amount (in the current Currency) to be transfered from the sender wallet to the destination wallet
 
@@ -484,7 +466,7 @@ class ApiCommunication:
         # prepare messages
         if "message_from" in kwargs and kwargs["message_from"] != "":
             ciphered_message_from, public_key = self.encryptTransactionMessage(
-                kwargs["message_from"], address=sender_account.address
+                kwargs["message_from"], address=account.address
             )
         else:
             ciphered_message_from = ""
@@ -497,11 +479,11 @@ class ApiCommunication:
             ciphered_message_to = ""
 
         # Get sender wallet infos
-        status = self.getAccountStatus(sender_account.address)
+        status = self.getAccountStatus(account.address)
         if status == 0:
             raise Exception(
                 "The sender wallet "
-                + sender_account.address
+                + account.address
                 + " is locked on server "
                 + self._currency_name
                 + " ("
@@ -509,11 +491,11 @@ class ApiCommunication:
                 + ") and therefore cannot initiate a transfer."
             )
 
-        balance = self.getAccountCMBalance(sender_account.address)
+        balance = self.getAccountCMBalance(account.address)
         if balance < amount:
             raise Exception(
                 "The sender wallet "
-                + sender_account.address
+                + account.address
                 + " has an insuficient CM balance on server "
                 + self._currency_name
                 + " ("
@@ -544,37 +526,37 @@ class ApiCommunication:
             "Transferring %s mutual credit %s from wallet %s to target wallet %s on server %s",
             amount,
             self._currency_name,
-            sender_account.address,
+            account.address,
             dest_address,
             "%s(%s, %s)" % (self._currency_name, self.contracts[0], self.contracts[1]),
         )
 
         return self.sendTransaction(
             self.CM_TRANSFER + data,
-            sender_account,
+            account,
             ciphered_message_from,
             ciphered_message_to,
             2,
         )
 
     ############################### High level Admin restricted Transactions
-    def enable(self, admin_account, address):
-        return self._lockUnlockAccount(admin_account, address, lock=False)
+    def enable(self, account, address):
+        return self._lockUnlockAccount(account, address, lock=False)
 
-    def disable(self, admin_account, address):
-        return self._lockUnlockAccount(admin_account, address, lock=True)
+    def disable(self, account, address):
+        return self._lockUnlockAccount(account, address, lock=True)
 
-    def _lockUnlockAccount(self, admin_account, address, lock=True):
+    def _lockUnlockAccount(self, account, address, lock=True):
         """Lock or unlock an Wallet on the current Currency (server)
 
         Parameters:
-        admin_account (eth_account import::Account): An account with admin permission on the current server. Will sign the transaction
+        account (eth_account import::Account): An account with admin permission on the current server. Will sign the transaction
         address (string): The public address of the wallet to be locked/unlocked (0x12345... format)
         lock (bool): if True, lock the wallet, if False unlock it
 
         """
         # Check the admin
-        self.checkAdmin(admin_account.address)
+        self.checkAdmin(account.address)
 
         # Get wallet infos
         status = self.getAccountStatus(address)
@@ -613,19 +595,19 @@ class ApiCommunication:
                 self._currency_name,
                 self.contracts[0],
             )
-            return self.sendTransaction(self.ACCOUNT_PARAM + data, admin_account)
+            return self.sendTransaction(self.ACCOUNT_PARAM + data, account)
 
-    def pledge(self, admin_account, address, amount, **kwargs):
+    def pledge(self, account, address, amount, **kwargs):
         """Pledge a given amount to a Wallet on the current Currency (server)
 
         Parameters:
-        admin_account (eth_account import::Account): An account with admin permission on the current server. Will sign the transaction
+        account (eth_account import::Account): An account with admin permission on the current server. Will sign the transaction
         address (string): The public address of the wallet to be pledged (0x12345... format)
         amount (double): amount (in the current Currency) to be pledged to the wallet
 
         """
         # Check the admin
-        self.checkAdmin(admin_account.address)
+        self.checkAdmin(account.address)
 
         # Get wallet infos
         status = self.getAccountStatus(address)
@@ -660,7 +642,7 @@ class ApiCommunication:
             self.endpoint,
         )
         return self.sendTransaction(
-            self.PLEDGE + data, admin_account, "", ciphered_message_to
+            self.PLEDGE + data, account, "", ciphered_message_to
         )
 
     def delegate(self, account, address, amount):
