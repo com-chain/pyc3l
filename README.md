@@ -58,19 +58,16 @@ pyc3l = Pyc3l()
 ## load your ciphered wallet
 wallet = pyc3l.Wallet.from_json(json_string_wallet)
 
-## unlock your wallet with your password
-wallet.unlock(mypassword)
-
-
 ## use the ``wallet`` object to read the blockchain
 
-wallet.IsValidAdmin
-wallet.Status
+wallet.isValidAdmin
+wallet.status
 
-wallet.GlobalBalance
-wallet.NantBalance
-wallet.CMBalance
-wallet.CMLimitMinimum
+wallet.globalBalance
+wallet.nantBalance
+wallet.cmBalance
+wallet.cmLimitMin
+wallet.cmLimitMax
 
 wallet.Allowances        ## dict of {address: amount}
 wallet.Requests          ## dict of {address: amount}
@@ -82,6 +79,9 @@ wallet.RejectedRequests  ## dict of {address: amount}
 
 
 ## use the ``wallet`` object to emit transaction
+
+## unlock your wallet with your password
+wallet.unlock(mypassword)
 
 wallet.enable(address)
 wallet.disable(address)

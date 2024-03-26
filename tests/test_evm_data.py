@@ -1,10 +1,8 @@
 import unittest
-from pyc3l.ApiHandling import ApiHandling
+from pyc3l import decode_data
 from pyc3l.ApiCommunication import (
     encodeNumber,
-    decode_data,
     encodeAddressForTransaction,
-    buildInfoData
 )
 
 
@@ -48,31 +46,6 @@ class test_ApiCommunication(unittest.TestCase):
         with self.assertRaises(Exception):
             encodeAddressForTransaction(address_4)
 
-    def test_buildInfoData(self):
-
-        # When
-        function_1 = "0x11111111"
-        function_2 = "11111111"
-        address_1 = "0xE00000000000000000000000000000000000000E"
-        address_2 = "E00000000000000000000000000000000000000E"
-
-        # then
-        self.assertEqual(
-            buildInfoData(function_1, address_1),
-            "0x11111111000000000000000000000000E00000000000000000000000000000000000000E",
-        )
-        self.assertEqual(
-            buildInfoData(function_2, address_1),
-            "0x11111111000000000000000000000000E00000000000000000000000000000000000000E",
-        )
-        self.assertEqual(
-            buildInfoData(function_1, address_2),
-            "0x11111111000000000000000000000000E00000000000000000000000000000000000000E",
-        )
-        self.assertEqual(
-            buildInfoData(function_2, address_2),
-            "0x11111111000000000000000000000000E00000000000000000000000000000000000000E",
-        )
 
 
 if __name__ == "__main__":

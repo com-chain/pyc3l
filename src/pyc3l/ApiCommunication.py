@@ -1,54 +1,20 @@
-from web3.eth import Eth
-import eth_abi
-
-import codecs
 import logging
-import time
-import collections
+import re
+from typing import NewType
 
 
 from .CryptoAsim import EncryptMessage, DecryptMessage
-from .ApiHandling import ApiHandling, Endpoint, APIError
+
 
 logger = logging.getLogger(__name__)
 
 
-def decode_data(abi_types, data):
-    unique = False
-    if isinstance(abi_types, str):
-        unique = True
-        abi_types = [abi_types]
-    if data.startswith("0x"):
-        data = data[2:]
+Address = NewType('Address', str)
+Uint256 = NewType('Uint256', int)
+Amount = NewType('Amount', Uint256)
+Bool = NewType('Bool', Uint256)
+Bytes = NewType('Bytes', bytes)
 
-    if len(data) == 0:
-        return None
-
-    try:
-        data_buffer = bytes.fromhex(data)
-    except ValueError:
-        raise ValueError("Invalid data provided: not a hex string")
-
-    if len(data_buffer) % 32 != 0:
-        raise ValueError("Invalid data provided: data length is not a multiple of 32")
-
-    res = eth_abi.decode(abi_types, data_buffer)
-    if unique:
-        return res[0]
-    return res
-
-
-BCListInfo = collections.namedtuple("BCListInfo", ["count", "map", "amount"])
-
-LIST_FUNCTIONS = {
-    "Allowance": BCListInfo("aa7adb3d", "b545b11f", "dd62ed3e"),
-    "Request": BCListInfo("debb9d28", "726d0a28", "3537d3fa"),
-    "MyRequest": BCListInfo("418d0fd4", "0becf93f", "09a15e43"),
-    "Delegation": BCListInfo("58fb5218", "ca40edf1", "046d3307"),
-    "MyDelegation": BCListInfo("7737784d", "49bce08d", "f24111d2"),
-    "AcceptedRequest": BCListInfo("8d768f84", "59a1921a", "958cde37"),
-    "RejectedRequest": BCListInfo("20cde8fa", "9aa9366e", "eac9dd4d"),
-}
 
 
 def encodeNumber(number):
@@ -68,104 +34,147 @@ def encodeAddressForTransaction(address):
     return full_address.zfill(64)
 
 
-def callNumericInfo(endpoint, contract, fn, address, divider=100.0):
-    return decode_data('int256',
-        read(endpoint, contract, fn, [address])
-    ) / divider
+class ComChainABI:
+
+    def accountType(account: Address) -> Uint256: "ba99af70"
+    def accountIsActive(account: Address) -> Bool: "61242bdd"
+    def accountIsOwner(account: Address) -> Bool: "2f54bf6e"
+    def accountCmLimitMax(account: Address) -> Amount: "cc885a65"
+    def accountCmLimitMin(account: Address) -> Amount: "ae7143d6"
+    def accountGlobalBalance(account: Address) -> Amount: "70a08231"
+    def accountNantBalance(account: Address) -> Amount: "ae261aba"
+    def accountCmBalance(account: Address) -> Amount: "bbc72a17"
+
+    def setAccountParam(
+            address: Address,
+            status: Uint256,
+            accountType: Uint256,
+            limitP: Amount,
+            limitM: Amount): "848b2592"
+    def pledge(address: Address, amount: Amount): "6c343eef"
+    def delegate(address: Address, amount: Amount): "75741c79"
+
+    def nantTransfer(dest: Address, amount: int): "a5f7c148-1"
+    def cmTransfer(dest: Address, amount: int): "60ca9c4c-1"
+    def transferNantOnBehalf(src: Address, to: Address, amount: int): "1b6b1ee5-1"
+
+    def accountAllowances(account: Address) -> list[Amount]: "aa7adb3d-1,b545b11f-1,dd62ed3e-1"
+    def accountRequests(account: Address) -> list[Amount]: "debb9d28-1,726d0a28-1,3537d3fa-1"
+    def accountMyRequests(account: Address) -> list[Amount]: "418d0fd4-1,0becf93f-1,09a15e43-1"
+    def accountDelegations(account: Address) -> list[Amount]: "58fb5218-1,ca40edf1-1,046d3307-1"
+    def accountMyDelegations(account: Address) -> list[Amount]: "7737784d-1,49bce08d-1,f24111d2-1"
+    def accountAcceptedRequests(account: Address) -> list[Amount]: "8d768f84-1,59a1921a-1,958cde37-1"
+    def accountRejectedRequests(account: Address) -> list[Amount]: "20cde8fa-1,9aa9366e-1,eac9dd4d-1"
 
 
-def read(endpoint, contract, fn, args):
-    try:
-        return endpoint.api.post(data={
-            "ethCall": get_data_obj(contract, fn, args)
-        })
-    except Exception as e:
-        logger.error(
-            "Unexpected failure of ethCall " +
-            f"contract: {contract}, fn: {fn}, args: {args!r}"
-        )
-        raise e
+class Contract:
 
-def get_data_obj(to: str, func: str, values):
-    return {
-        "to": to,
-        "data": func + "".join(
-            (v[2:] if v.startswith("0x") else v).zfill(64)
-            for v in values
-        )
+    def __init__(self, pyc3l, abi, contracts):
+        self._pyc3l = pyc3l
+        self._abi = abi
+        self._contracts = contracts
+
+
+    CONVERSIONS = {
+        Uint256: lambda x: int(x),
+        Amount: lambda x: x / 100.0,
+        Bool: lambda x: bool(x),
     }
 
-
-def get_amount_for_element(endpoint, contract, fn, caller, element_address):
-    data = read(endpoint, contract, fn, [caller, element_address])
-    return decode_data("int256", data)/100.0
-
-
-def get_element_in_list(endpoint, contract, map_fn, amount_fn, caller_address,
-                        idx, dct, idx_min):
-    if idx < idx_min:
-        return dct
-    ## check that:
-    ## - caller_address is naked
-    ## - pad_left is working as expected
-    data = read(endpoint, contract, map_fn, [
-        caller_address,
-        hex(idx)[2:]
-    ])
-    amount = get_amount_for_element(endpoint, contract, amount_fn, caller_address, data)
-
-    address = "0x" + data[-40:]
-    dct[address] = amount
-    return get_element_in_list(
-        endpoint,
-        contract, map_fn, amount_fn,
-        caller_address, idx - 1, dct, idx_min
-    )
+    @property
+    def abi_read_functions(self):
+        if not hasattr(self, "_abi_read_functions"):
+            ## Read function have return value type annotations
+            self._abi_read_functions = dict(filter(
+                lambda x: x[1] is not None, [
+                    (key, fn.__annotations__.get("return"))
+                    for key, fn in self._abi.__dict__.items()
+                    if callable(fn) and hasattr(fn, "__annotations__")
+                ]))
+        return self._abi_read_functions
 
 
-CONTRACT_FUNCTIONS = [
-    # First Contract
-    {
-        # Consultation
-        "accountType": "ba99af70",
-        "accountStatus": "61242bdd",
-        "accountIsOwner": "2f54bf6e",
-        "accountCMLimitM": "cc885a65",
-        "accountCMLimitP": "ae7143d6",
-        "globalBalance": "70a08231",
-        "nantBalance": "ae261aba",
-        "cmBalance": "bbc72a17",
+    def _get_contract_fn_hexs(self, fn_name):
+        fn_def = getattr(self._abi, fn_name, None)
+        if fn_def is None:
+            raise AttributeError(f"Function {fn_name!r} not found in ABI")
+        fn_hexs = fn_def.__doc__.split(",")
+        parsed_fn_hexs = []
+        for fn_hex in fn_hexs:
+            hex_parts = fn_hex.split("-", 1)
+            if not re.match("^[0-9a-f]{8}$", hex_parts[0]):
+                raise ValueError(
+                    f"Invalid hex data provided ({hex_parts[0]!r}) for {fn_name!r} function"
+                )
 
-        # Transaction
-        "setAccountParam": "848b2592",
-        "pledge": "6c343eef",
-        "delegate": "75741c79",
-    },
-    # Second Contract
-    {
-        "nantTransfer": "a5f7c148",
-        "cmTransfer": "60ca9c4c",
-        "transferNantOnBehalf": "1b6b1ee5",
-    }
-]
+            contract = self._contracts[0 if len(hex_parts) == 1 else int(hex_parts[1])]
+            fn_hex = f"0x{hex_parts[0]}"
+            parsed_fn_hexs.append((contract, fn_hex))
+        return parsed_fn_hexs
 
-def getContractFunctionHex(fn_name):
-    for idx, function_defs in enumerate(CONTRACT_FUNCTIONS):
-        fn = function_defs.get(fn_name, None)
-        if fn:
-            return idx, f"0x{fn}"
-    else:
-        raise ValueError(f"Unknown function {fn_name!r}")
+    def __getattr__(self, label):
+        if not label.startswith("get"):
+            raise AttributeError(label)
+
+        key = label[3:]
+        key = key[0].lower() + key[1:]
+
+        return_type = self.abi_read_functions.get(key)
+        if not return_type:
+            raise AttributeError(
+                f"Comchain read function {key!r} not found in ABI"
+            )
+        parsed_fn_hexs = self._get_contract_fn_hexs(key)
+
+        if getattr(return_type, "__origin__", None) is list:
+            try:
+                count_fn, map_fn, amount_fn  = parsed_fn_hexs
+            except ValueError:
+                raise ValueError(
+                    f"Invalid list function {key} docstring: {doc!r}, "
+                    "please provide count, map, amount hex functions separated by commas"
+                )
+            def get_list_function(address, idx_min=0, idx_max=0):
+                count = self._pyc3l.read(count_fn, [address])
+                return self._pyc3l.get_element_in_list(
+                    map_fn,
+                    amount_fn,
+                    address,
+                    min(count - 1, idx_max),
+                    {},
+                    idx_min
+                )
+
+            return get_list_function
+
+
+        def _method(address):
+            value = self._pyc3l.read(parsed_fn_hexs[0], [address])
+            return self.CONVERSIONS[return_type](value)
+        return _method
 
 
 class ApiCommunication:
-    def __init__(self, currency_name, pyc3l):
+
+    def __init__(self, currency_name, pyc3l, abi=ComChainABI):
         self._currency_name = currency_name
 
         self._current_block = 0
-        self._additional_nonce = 0
         self._metadata = None
         self._pyc3l = pyc3l
+
+        self._comchain = None
+        self._abi = abi
+
+    @property
+    def comchain(self):
+        if self._comchain is None:
+            self._comchain = Contract(
+                self._pyc3l,
+                self._abi,
+                self.contracts
+            )
+        return self._comchain
 
     @property
     def endpoint(self):
@@ -189,14 +198,6 @@ class ApiCommunication:
             server["contract_2"],
         )
 
-    def getNumericalInfo(self, address, fn_name, divider=100.0):
-        contract_id, fn_hex = getContractFunctionHex(fn_name)
-        contract = self.contracts[contract_id]
-
-        return callNumericInfo(
-            self.endpoint, contract, fn_hex, address, divider
-        )
-
     def checkAdmin(self, address):
         if not self.getAccountIsValidAdmin(address):
             raise Exception(
@@ -210,49 +211,7 @@ class ApiCommunication:
                 f"The provided account {address} has not enough gas."
             )
 
-    def updateNonce(self, nonce):
-        if not self._pyc3l.hasChangedBlock(do_reset=True):
-            self._additional_nonce = self._additional_nonce + 1
-            return nonce + self._additional_nonce
-        else:
-            self._additional_nonce = 0
-            return nonce
 
-    def sendTransaction(
-            self,
-            fn_name,
-            data,
-            account,
-            ciphered_message_from="",
-            ciphered_message_to="",
-    ):
-        contract_id, fn_hex = getContractFunctionHex(fn_name)
-        contract = self.contracts[contract_id]
-        tr_infos = self._pyc3l.getTrInfos(account.address)
-
-        transaction = {
-            "to": contract,
-            "value": 0,
-            "gas": 5000000,
-            "gasPrice": int(tr_infos["gasprice"], 0),
-            "nonce": self.updateNonce(int(tr_infos["nonce"], 0)),
-            "data": fn_hex + data,
-            "from": account.address,
-        }
-
-        signed = Eth.account.signTransaction(transaction, account.privateKey)
-        str_version = (
-            "0x" + str(codecs.getencoder("hex_codec")(signed.rawTransaction)[0])[2:-1]
-        )
-        raw_tx = {"rawtx": str_version}
-
-        if ciphered_message_from != "":
-            raw_tx["memo_from"] = ciphered_message_from
-
-        if ciphered_message_to != "":
-            raw_tx["memo_to"] = ciphered_message_to
-
-        return self.endpoint.api.post(data=raw_tx)
 
     ############################### messages with transaction handling
     def getMessageKeys(self, address, with_private):
@@ -300,76 +259,14 @@ class ApiCommunication:
 
     ############################### High level Functions
 
-    def getAccountType(self, address):
-        return int(
-            self.getNumericalInfo(
-                address,
-                "accountType",
-                divider=1,
-            )
-        )
-
-    def getAccountStatus(self, address):
-        return int(
-            self.getNumericalInfo(
-                address,
-                "accountStatus",
-                divider=1,
-            )
-        )
-
     def getAccountIsValidAdmin(self, address):
         return (
             self.getAccountType(address) == 2
-            and self.getAccountStatus(address) == 1
-        )
-
-    def getAccountIsOwner(self, address):
-        return int(
-            self.getNumericalInfo(
-                address,
-                "accountIsOwner",
-                divider=1,
-            )
+            and self.getAccountIsActive(address) == True
         )
 
     def getAccountHasEnoughGas(self, address, min_gas=5000000):
         return int(self._pyc3l.getTrInfos(address)["balance"]) > min_gas
-
-    def getAccountGlobalBalance(self, address):
-        return self.getNumericalInfo(
-            address,
-            "globalBalance",
-            divider=100.0,
-        )
-
-    def getAccountNantBalance(self, address):
-        return self.getNumericalInfo(
-            address,
-            "nantBalance",
-            divider=100.0,
-        )
-
-    def getAccountCMBalance(self, address):
-        return self.getNumericalInfo(
-            address,
-            "cmBalance",
-            divider=100.0,
-        )
-
-    def getAccountCMLimitMaximum(self, address):
-        return self.getNumericalInfo(
-            address,
-            "accountCMLimitP",
-            divider=100.0,
-        )
-
-    def getAccountCMLimitMinimum(self, address):
-        return self.getNumericalInfo(
-            address,
-            "accountCMLimitM",
-            divider=100.0,
-        )
 
     ############################### High level Transactions
     def transferNant(self, account, dest_address, amount, **kwargs):
@@ -400,8 +297,7 @@ class ApiCommunication:
             ciphered_message_to = ""
 
         # Get sender wallet infos
-        status = self.getAccountStatus(account.address)
-        if status == 0:
+        if not self.getAccountIsActive(account.address):
             raise Exception(
                 f"The sender wallet {account.address} is locked "
                 f"on {self._currency_name} ({self.contracts[0]}) "
@@ -417,8 +313,7 @@ class ApiCommunication:
             )
 
         # Get destination wallet infos
-        status = self.getAccountStatus(dest_address)
-        if status == 0:
+        if not self.getAccountIsActive(dest_address):
             raise Exception(
                 f"The destination wallet {dest_address} is locked on "
                 f"{self._currency_name}  ({self.contracts[0]}) and "
@@ -439,8 +334,8 @@ class ApiCommunication:
             dest_address,
             "%s(%s, %s)" % (self._currency_name, self.contracts[0], self.contracts[1]),
         )
-        return self.sendTransaction(
-            "nantTransfer",
+        return self._pyc3l.send_transaction(
+            self.comchain._get_contract_fn_hexs("nantTransfer")[0],
             data,
             account,
             ciphered_message_from,
@@ -473,8 +368,7 @@ class ApiCommunication:
             ciphered_message_to = ""
 
         # Get sender wallet infos
-        status = self.getAccountStatus(account.address)
-        if status == 0:
+        if not self.getAccountIsActive(account.address):
             raise Exception(
                 "The sender wallet "
                 + account.address
@@ -498,8 +392,7 @@ class ApiCommunication:
             )
 
         # Get destination wallet infos
-        status = self.getAccountStatus(dest_address)
-        if status == 0:
+        if not self.getAccountIsActive(dest_address):
             raise Exception(
                 "The destination wallet "
                 + dest_address
@@ -525,8 +418,8 @@ class ApiCommunication:
             "%s(%s, %s)" % (self._currency_name, self.contracts[0], self.contracts[1]),
         )
 
-        return self.sendTransaction(
-            "cmTransfer",
+        return self._pyc3l.send_transaction(
+            self.comchain._get_contract_fn_hexs("cmTransfer")[0],
             data,
             account,
             ciphered_message_from,
@@ -553,43 +446,44 @@ class ApiCommunication:
         self.checkAdmin(account.address)
 
         # Get wallet infos
-        status = self.getAccountStatus(address)
+        status = self.getAccountIsActive(address)
 
-        if lock and status == 0:
+        if lock and not status:
             logger.info("The wallet %s is already locked", address)
             return None
-        elif not lock and status == 1:
+        if not lock and status:
             logger.info("The wallet %s is already unlocked", address)
             return None
-        else:
 
-            # Get wallet infos
-            acc_type = self.getAccountType(address)
-            lim_m = self.getAccountCMLimitMinimum(address)
-            lim_p = self.getAccountCMLimitMaximum(address)
+        # Get wallet infos
+        acc_type = self.getAccountType(address)
+        lim_m = self.getAccountCmLimitMin(address)
+        lim_p = self.getAccountCmLimitMax(address)
 
-            status = 1
-            if lock:
-                status = 0
+        status = 1
+        if lock:
+            status = 0
 
-            # prepare the data
-            data = encodeAddressForTransaction(address)
-            data += (
-                encodeNumber(status)
-                + encodeNumber(acc_type)
-                + encodeNumber(int(lim_p * 100))
-                + encodeNumber(int(lim_m * 100))
-            )
+        # prepare the data
+        data = encodeAddressForTransaction(address)
+        data += (
+            encodeNumber(status)
+            + encodeNumber(acc_type)
+            + encodeNumber(int(lim_p * 100))
+            + encodeNumber(int(lim_m * 100))
+        )
 
-            # send the transaction
-            logger.info(
-                "%s the wallet %s on server %s (%s)",
-                "Locking" if lock else "Unlocking",
-                address,
-                self._currency_name,
-                self.contracts[0],
-            )
-            return self.sendTransaction("setAccountParam", data, account)
+        # send the transaction
+        logger.info(
+            "%s the wallet %s on server %s (%s)",
+            "Locking" if lock else "Unlocking",
+            address,
+            self._currency_name,
+            self.contracts[0],
+        )
+        return self._pyc3l.send_transaction(
+            self.comchain._get_contract_fn_hexs("setAccountParam")[0],
+            data, account)
 
     def pledge(self, account, address, amount, **kwargs):
         """Pledge a given amount to a Wallet on the current Currency (server)
@@ -604,8 +498,7 @@ class ApiCommunication:
         self.checkAdmin(account.address)
 
         # Get wallet infos
-        status = self.getAccountStatus(address)
-        if status == 0:
+        if not self.getAccountIsActive(address):
             logger.warn(
                 "The target wallet %s is locked on server %s (%s)",
                 address,
@@ -635,8 +528,9 @@ class ApiCommunication:
             self.contracts[0],
             self.endpoint,
         )
-        return self.sendTransaction(
-            "pledge", data, account, "", ciphered_message_to
+        return self._pyc3l.send_transaction(
+            self.comchain._get_contract_fn_hexs("pledge")[0],
+            data, account, "", ciphered_message_to
         )
 
     def delegate(self, account, address, amount):
@@ -663,7 +557,9 @@ class ApiCommunication:
             self.contracts[0],
             self.endpoint,
         )
-        return self.sendTransaction("delegate", data, account)
+        return self._pyc3l.send_transaction(
+            self.comchain._get_contract_fn_hexs("delegate")[0],
+            data, account)
 
     def transferOnBehalfOf(self, account, address_from, address_to, amount, **kwargs):
         """Transfer amount money from address_from to address_to
@@ -705,8 +601,8 @@ class ApiCommunication:
             address_to,
             amount,
         )
-        return self.sendTransaction(
-            "transferNantOnBehalf",
+        return self._pyc3l.send_transaction(
+            self.comchain._get_contract_fn_hexs("transferNantOnBehalf")[0],
             data,
             account,
             ciphered_message_from,
@@ -714,27 +610,5 @@ class ApiCommunication:
         )
 
     def __getattr__(self, label):
-        if label.startswith("get") and label.endswith("List"):
-            key = label[3:-4]
-            if key in LIST_FUNCTIONS:
-                list_info = LIST_FUNCTIONS[key]
-                contract = self.contracts[1]
-
-                def get_list_function(address, idx_min=0, idx_max=0):
-                    data = read(self.endpoint, contract,
-                                f"0x{list_info.count}", [address])
-                    count = decode_data('int256', data)
-                    return get_element_in_list(
-                        self.endpoint,
-                        contract,
-                        f"0x{list_info.map}",
-                        f"0x{list_info.amount}",
-                        address,
-                        min(count - 1, idx_max),
-                        {},
-                        idx_min
-                    )
-
-                return get_list_function
-        raise AttributeError(label)
+        return getattr(self.comchain, label)
 
