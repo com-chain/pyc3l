@@ -4,6 +4,7 @@ import logging
 import time
 import codecs
 
+from web3 import Web3
 from web3.eth import Eth
 import eth_abi
 
@@ -178,8 +179,9 @@ class Pyc3l:
     ):
         tr_infos = self.getTrInfos(account.address)
         gas_price = int(tr_infos["gasprice"], 0)
+        gas_price_gwei = Web3.fromWei(gas_price, "gwei")
         nonce = int(tr_infos["nonce"], 0)
-        logger.info(f"Gas price: {gas_price!r}, Nonce: {nonce!r}")
+        logger.info(f"Gas price: {gas_price!r} wei ({gas_price_gwei} gwei), Nonce: {nonce!r}")
         transaction = {
             "to": fn[0],
             "value": 0,
