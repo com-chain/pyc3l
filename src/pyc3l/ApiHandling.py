@@ -139,7 +139,8 @@ class Endpoint(BaseEndpoint):
         "api": "/api.php",
         "config": "/ipns/QmaAAZor2uLKnrzGCwyXTSwogJqmPjJgvpYgpmtz5XcSmR/configs/",
         "endpoint_list": "/ipns/QmcRWARTpuEf9E87cdA4FfjBkv7rKTJyfvsLFTzXsGATbL",
-        "keys": "/keys.php"
+        "keys": "/keys.php",
+        "transactions": "/trnslist.php",
     }
 
     def __init__(self, url):
