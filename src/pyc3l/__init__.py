@@ -76,6 +76,12 @@ class Pyc3l:
             self._endpoint_resolver = ApiHandling()
 
     @property
+    def endpoints(self):
+        if self._endpoint_resolver is not None:
+            return self._endpoint_resolver.endpoints
+        return [self._endpoint]
+
+    @property
     def endpoint(self):
         if self._endpoint_resolver is not None:
             now = time.time()
