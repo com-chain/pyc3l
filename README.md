@@ -17,6 +17,7 @@ This code is for python3 and uses:
 - eth_account
 - web3
 - ecdsa
+- requests
 
 ## Installation
 
@@ -111,7 +112,7 @@ please check out the guidelines.
 
 ### Test
 
-To run the tests::
+To run the tests, you'll need to install `hatch` and::
 
 ```
 hatch run test
