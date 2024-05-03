@@ -141,6 +141,7 @@ class Endpoint(BaseEndpoint):
         "endpoint_list": "/ipns/QmcRWARTpuEf9E87cdA4FfjBkv7rKTJyfvsLFTzXsGATbL",
         "keys": "/keys.php",
         "transactions": "/trnslist.php",
+        "lost_transactions": "/lost_trn.php",
     }
 
     def __init__(self, url):
