@@ -142,6 +142,7 @@ class Endpoint(BaseEndpoint):
         "keys": "/keys.php",
         "transactions": "/trnslist.php",
         "lost_transactions": "/lost_trn.php",
+        "block": "/block.php",
     }
 
     def __init__(self, url):

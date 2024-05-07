@@ -144,6 +144,19 @@ class Pyc3l:
             r = json.loads(r)
         return r
 
+    def getBlockInfo(self, block_number):
+        """Get block transactions from block_number in hex without 0x in front"""
+        idx = 0
+        while True:
+            try:
+                yield self.endpoint.block.get(params={
+                    "block": f"0x{block_number}",
+                    "index": hex(idx),
+                })
+            except Exception as e:
+                break
+            idx += 1
+
     def getTrInfos(self, address):
         return self.endpoint.api.post(data={"txdata": address})
 
