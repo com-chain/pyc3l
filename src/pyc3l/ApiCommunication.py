@@ -110,7 +110,23 @@ class Contract:
         Bool: lambda x: bool(x),
     }
 
+    @property
+    def abi_rev_transaction_functions(self):
+        """Dictionary of transaction functions in the ABI
 
+        Key is a tuple (contract, fn_hex), value is the name of the function
+
+        """
+        if not hasattr(self, "_abi_rev_transaction_functions"):
+            res = dict([
+                (self._get_contract_fn_hexs(key)[0], key)
+                for key in self._abi._transaction_functions.keys()
+            ])
+            self._abi_rev_transaction_functions = {
+                (contract[2:].lower(), fn_hex[2:]): key
+                for (contract, fn_hex), key in res.items()
+            }
+        return self._abi_rev_transaction_functions
 
     def _get_contract_fn_hexs(self, fn_name):
         fn_def = getattr(self._abi, fn_name, None)
