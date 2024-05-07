@@ -34,7 +34,36 @@ def encodeAddressForTransaction(address):
     return full_address.zfill(64)
 
 
-class ComChainABI:
+class MetaABI(type):
+
+    def __new__(cls, name, bases, dct):
+        new_cls = super().__new__(cls, name, bases, dct)
+        if name == "ABI":
+            return new_cls
+        new_cls._read_functions = dict(filter(
+            lambda x: x[1] is not None, [
+                (key, fn.__annotations__.get("return"))
+                for key, fn in dct.items()
+                if callable(fn) and hasattr(fn, "__annotations__")
+            ]))
+        new_cls._transaction_functions = dict([
+            (key, fn.__doc__)
+            for key, fn in dct.items()
+            if callable(fn) and hasattr(fn, "__annotations__") and
+            fn.__annotations__.get("return") is None
+        ])
+        new_cls._rev_transaction_functions = dict([
+            (fn_hex, key)
+            for key, fn_hex in new_cls._transaction_functions.items()
+        ])
+        return new_cls
+
+    
+class ABI(metaclass=MetaABI):
+    """Abstract Base Class for ABI classes"""
+
+
+class ComChainABI(ABI):
 
     def accountType(account: Address) -> Uint256: "ba99af70"
     def accountIsActive(account: Address) -> Bool: "61242bdd"
@@ -81,17 +110,6 @@ class Contract:
         Bool: lambda x: bool(x),
     }
 
-    @property
-    def abi_read_functions(self):
-        if not hasattr(self, "_abi_read_functions"):
-            ## Read function have return value type annotations
-            self._abi_read_functions = dict(filter(
-                lambda x: x[1] is not None, [
-                    (key, fn.__annotations__.get("return"))
-                    for key, fn in self._abi.__dict__.items()
-                    if callable(fn) and hasattr(fn, "__annotations__")
-                ]))
-        return self._abi_read_functions
 
 
     def _get_contract_fn_hexs(self, fn_name):
@@ -119,7 +137,7 @@ class Contract:
         key = label[3:]
         key = key[0].lower() + key[1:]
 
-        return_type = self.abi_read_functions.get(key)
+        return_type = self._abi._read_functions.get(key)
         if not return_type:
             raise AttributeError(
                 f"Comchain read function {key!r} not found in ABI"
