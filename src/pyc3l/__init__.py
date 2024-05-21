@@ -33,7 +33,8 @@ import eth_abi
 
 from .wallet import Wallet
 from .ApiCommunication import ApiCommunication, ComChainABI
-from .ApiHandling import ApiHandling, Endpoint
+from .ApiHandling import ApiHandling, Endpoint, APIErrorNoMessage
+from .lib.dt import utc_ts_to_dt, utc_ts_to_local_iso, dt_to_local_iso
 
 logger = logging.getLogger(__name__)
 
@@ -74,13 +75,29 @@ class WalletLocked(Exception): pass
 class AddressableObject:
 
     def __init__(self, address):
-        self.address = address[2:] if address.startswith("0x") else address
+        self.address = address[2:] \
+            if isinstance(address, str) and address.startswith("0x") else \
+               address
 
+class AddressableBridgeObject(AddressableObject):
+
+    def __init__(self, address, data=None):
+        super().__init__(address)
+        if data is not None:
+            self._data = data
+
+    def __getattr__(self, label):
+        if label.startswith("_"):
+            raise AttributeError(label)
+
+        if label in self._data:
+            return self._data[label]
+        raise AttributeError(label)
 
 class Account(AddressableObject): pass
-class Transaction(AddressableObject): pass
-class Block(AddressableObject): pass
-
+class Transaction(AddressableBridgeObject): pass
+class BCTransaction(AddressableBridgeObject): pass
+class Block(AddressableBridgeObject): pass
 
 class Pyc3l:
 
@@ -90,6 +107,8 @@ class Pyc3l:
         self._current_block = 0
 
         self._endpoint_last_usage = None
+
+        self.contract_hex_to_currency = {}
 
         if endpoint:
             logger.info(f"endpoint: {endpoint} (fixed)")
@@ -145,18 +164,19 @@ class Pyc3l:
             r = json.loads(r)
         return r
 
-    def getBlockInfo(self, block_number):
-        """Get block transactions from block_number in hex without 0x in front"""
-        idx = 0
-        while True:
-            try:
-                yield self.endpoint.block.get(params={
-                    "block": f"0x{block_number}",
-                    "index": hex(idx),
-                })
-            except Exception as e:
-                break
-            idx += 1
+    def getBlockByNumber(self, nb):
+        """Get block info given int nb"""
+        try:
+            return self.endpoint.block.get(params={"block": f"{hex(nb)}"})
+        except APIErrorNoMessage:
+            return None
+
+    def getBlockByHash(self, hash):
+        """Get block info given it's string hash (with 0x in front)"""
+        try:
+            return self.endpoint.block.get(params={"hash": hash})
+        except APIErrorNoMessage:
+            return None
 
     def getTrInfos(self, address):
         return self.endpoint.api.post(data={"txdata": address})
@@ -290,6 +310,10 @@ class Pyc3l:
             def symbol(self):
                 return self.metadata["server"]["currencies"]["CUR"]
 
+            @property
+            def name(self):
+                return name
+
         return Pyc3lCurrency(name, pyc3l_instance)
 
     @property
@@ -321,7 +345,7 @@ class Pyc3l:
 
         return Pyc3lWallet
 
-    def Transaction(pyc3l_instance, address):
+    def Transaction(pyc3l_instance, *args, **kwargs):
 
         class Pyc3lTransaction(Transaction):
 
@@ -336,105 +360,252 @@ class Pyc3l:
                 return "status" in self.data
 
             @property
-            def block(self):
-                return self.data["transaction"]["blockNumber"]
-
-            @property
-            def received_at(self):
-                if not self.is_cc_transaction:
-                    return False
-                res = int(self.data["time"])
-                return datetime.datetime.utcfromtimestamp(res)
-
-            @property
-            def currency(self):
-                res = self.data.get("currency")
-                if res is None:
-                    return None
-                return pyc3l_instance.Currency(res)
+            def bc_tx_data(self):
+                if "transaction" not in self.data:
+                    ## we don't have the bc transaction info
+                    self.data["transaction"] = pyc3l_instance.getTransactionInfo(self.address)["transaction"]
+                return self.data["transaction"]
 
             @property
             def input_hex(self):
                 return self.data["transaction"]["input"]
 
             @property
-            def abi_fn(self):
-                abi_fn_hex = self.input_hex[2:10]
-                if not self.currency:
-                    abi_rev_fns = ComChainABI._rev_transaction_functions
-                    return (
-                        f"[{self.data['transaction']['to'][2:8]}..]",
-                        abi_rev_fns.get(abi_fn_hex, abi_fn_hex) 
-                    )
-                abi_rev_fns =  self.currency.comchain.abi_rev_transaction_functions
-                key = (self.data["transaction"]["to"][2:].lower(), abi_fn_hex)
-                if key not in abi_rev_fns:
-                    abi_rev_fns = ComChainABI._rev_transaction_functions
-                    return (
-                        f"[{self.data['transaction']['to'][2:8]}..]",
-                        abi_rev_fns.get(abi_fn_hex, abi_fn_hex) 
-                    )
-                contract_idx = [c.lower() for c in self.currency.contracts].index(
-                    self.data["transaction"]["to"]
-                )
-                assert contract_idx is not None
-                return (
-                    f"{self.currency.symbol}.{contract_idx + 1}",
-                    abi_rev_fns[key]
-                )
-
-            @property
-            def first_sibling_transaction_time(self):
+            def received_at(self):
                 if not self.is_cc_transaction:
                     return False
-                ## XXXvlab: depending on the API endpoint used, it can be
-                ## a dict or the direct value.
-                res = self.data["receivedat"]
-                if isinstance(res, dict):
-                    res = int(res["value"])
-                else:
-                    res = int(res)
-                return datetime.datetime.utcfromtimestamp(res)
+                res = int(self.data["time"])
+                return utc_ts_to_dt(res)
 
             @property
-            def cost_gas(self):
-                return int(self.data["transaction"]["gas"], 16)
+            def currency(self):
+                if "transaction" not in self.data:
+                    return pyc3l_instance.Currency(self.data["currency"])
+                contract = self.bc_tx_data["to"]
+                if contract not in pyc3l_instance.contract_hex_to_currency:
+                    currency = self.data.get("currency")
+                    if currency is None:
+                        return None
+                    pyc3l_instance.contract_hex_to_currency[contract] = \
+                        pyc3l_instance.Currency(currency)
+                return pyc3l_instance.contract_hex_to_currency[contract]
 
             @property
-            def gas_price(self):
-                return int(self.data["transaction"]["gasPrice"], 16)
-
-            @property
-            def cost_wei(self):
-                return self.cost_gas * self.gas_price
-
-            @property
-            def cost_eth(self):
-                return Web3.fromWei(self.cost_wei, 'ether')
-
-            @property
-            def cost_gwei(self):
-                return Web3.fromWei(self.cost_wei, 'gwei')
+            def block(self):
+                if self.data["block"] is None:
+                    return None
+                return pyc3l_instance.BlockByNumber(int(self.data["block"]))
 
             @property
             def pending(self):
                 if not self.is_cc_transaction:
                     return False
                 if self.block is None:
-                    assert self.data["block"] is None and self.data["status"] == 1
+                    assert self.data["status"] == 1
                 else:
-                    assert self.data["block"] == int(self.block, 16) and self.data["status"] == 0
+                    assert self.data["status"] == 0
                 return self.block is None
 
-        return Pyc3lTransaction(address)
+            @property
+            def bc_tx(self):
+                if "transaction" not in self.data:
+                    full_tx = pyc3l_instance.getTransactionInfo(self.address)
+                    if full_tx is None:
+                        raise Exception(f"Unexpected error: couldn't re-request transaction info of {self.address}")
+                    return pyc3l_instance.BCTransaction(
+                        self.address,
+                        data=full_tx["transaction"]
+                    )
+                return pyc3l_instance.BCTransaction(
+                    self.address,
+                    data=self.data["transaction"]
+                )
+
+            @property
+            def time(self):
+                ts = self.time_ts
+                if ts is None:
+                    return None
+                return utc_ts_to_dt(ts)
+
+            @property
+            def time_ts(self):
+                if "time" in self.data:
+                    return int(self.data["time"])
+                return None
+
+            @property
+            def type(self):
+                return self.data["type"].lower()
+
+            @property
+            def time_iso(self):
+                dt = self.time
+                if dt is None:
+                    return None
+                return dt_to_local_iso(dt)
+
+        return Pyc3lTransaction(*args, **kwargs)
+
+    def BCTransaction(pyc3l_instance, *args, **kwargs):
+
+        class Pyc3lBCTransaction(Transaction):
+
+            @property
+            def data(self):
+                if not hasattr(self, "_data"):
+                    raise NotImplementedError("Not implemented")
+                return self._data
+
+            @property
+            def bc_tx_data(self):
+                return self.data
+
+            @property
+            def block(self):
+                return self.data["blockNumber"]
+
+            @property
+            def full_tx(self):
+                try:
+                    return pyc3l_instance.Transaction(
+                        self.data["hash"],
+                        data=pyc3l_instance.getTransactionInfo(self.address))
+                except APIErrorNoMessage:
+                    return None
+
+            @property
+            def currency(self):
+                contract = self.data["to"]
+                if contract not in pyc3l_instance.contract_hex_to_currency:
+                    pyc3l_instance.contract_hex_to_currency[contract] = self.full_tx.currency
+                return pyc3l_instance.contract_hex_to_currency[contract]
+
+            @property
+            def input_hex(self):
+                return self.data["input"]
+
+            @property
+            def fn(self):
+                return self.input_hex[2:10]
+
+            @property
+            def gas_limit(self):
+                return int(self.data["gas"], 16)
+
+            @property
+            def gas_price(self):
+                return int(self.data["gasPrice"], 16)
+
+            @property
+            def gas_price_wei(self):
+                return self.gas_price
+
+            @property
+            def gas_price_gwei(self):
+                return Web3.fromWei(self.gas_price, 'gwei')
+
+            @property
+            def limit_cost_wei(self):
+                return self.cost_gas * self.gas_price
+
+            @property
+            def limit_cost_eth(self):
+                return Web3.fromWei(self.cost_wei, 'ether')
+
+            @property
+            def limit_cost_gwei(self):
+                return Web3.fromWei(self.cost_wei, 'gwei')
+
+            @property
+            def block(self):
+                return pyc3l_instance.getBlockByHash(self.data["blockHash"])
+
+            @property
+            def abi_fn(self):
+                bc_tx_data = self.data
+                if bc_tx_data["to"] is None:
+                    return ("" , "loadContract")
+                abi_fn_hex = bc_tx_data["input"][2:10]
+                if not self.currency:
+                    abi_rev_fns = ComChainABI._rev_transaction_functions
+                    return (
+                        f"[{bc_tx_data['to'][2:8]}‥]",
+                        abi_rev_fns.get(abi_fn_hex, f'[{abi_fn_hex}‥]')
+                    )
+                abi_rev_fns =  self.currency.comchain.abi_rev_transaction_functions
+                key = (bc_tx_data["to"][2:].lower(), abi_fn_hex)
+                if key not in abi_rev_fns:
+                    abi_rev_fns = ComChainABI._rev_transaction_functions
+                    return (
+                        f"<{bc_tx_data['to'][2:8]}‥>",
+                        abi_rev_fns.get(abi_fn_hex, abi_fn_hex)
+                    )
+                contract_idx = [c.lower() for c in self.currency.contracts].index(
+                    bc_tx_data["to"]
+                )
+                assert contract_idx is not None
+                return (
+                    f"{self.currency.symbol}-{contract_idx + 1}",
+                    abi_rev_fns[key]
+                )
+
+
+        return Pyc3lBCTransaction(*args, **kwargs)
 
     def Block(pyc3l_instance, address):
 
         class Pyc3lBlock(Block):
 
             @property
-            def transactions(self):
-                for transaction in pyc3l_instance.getBlockInfo(self.address):
-                    yield pyc3l_instance.Transaction(transaction["hash"])
+            def data(self):
+                if not hasattr(self, "_data"):
+                    self._data = pyc3l_instance.getBlockInfo(self.address)
+                return self._data
+
+            @property
+            def number(self):
+                return int(self.number_hex, 16)
+
+            @property
+            def number_hex(self):
+                return self.data["number"]
+
+            @property
+            def collated_ts(self):
+                return int(self.data["timestamp"], 16)
+
+            @property
+            def collated_dt(self):
+                return utc_ts_to_dt(self.collated_ts)
+
+            @property
+            def collated_iso(self):
+                return utc_ts_to_local_iso(self.collated_ts)
+
+            @property
+            def next(self):
+                return pyc3l_instance.BlockByNumber(self.number + 1)
+
+            @property
+            def prev(self):
+                if self.number == 0:
+                    return None
+                return pyc3l_instance.BlockByNumber(self.number - 1)
+
+            @property
+            def bc_txs(self):
+                return [
+                    pyc3l_instance.BCTransaction(tx["hash"], data=tx) for tx in self.data['transactions']
+                ]
 
         return Pyc3lBlock(address)
+
+    def BlockByNumber(self, nb):
+        block = self.Block(None)
+        data = self.getBlockByNumber(nb)
+        if data is None:
+            data = {"number": hex(nb), "hash": "0x0"}
+        block._data = data
+        block.address = block._data["hash"]
+        return block

@@ -20,6 +20,8 @@ class HTTPError(Exception): pass
 
 class APIError(Exception): pass
 
+class APIErrorNoMessage(APIError): pass
+
 
 def urlencode_prepare_dict(dct):
     """Flattens nested dict to support urlencode
@@ -125,7 +127,7 @@ class BaseEndpoint(object):
                 data_msg = f" (data: {data.get('data')})" if data['data'] else ""
                 if data['msg']:
                     raise APIError(f"API Call failed with message: {data['msg']}{data_msg}")
-                raise APIError("API Call failed without message{data_msg}")
+                raise APIErrorNoMessage(f"API Call failed without message: JSON: {data}")
             if "data" in data:
                 return data["data"]
             return data
