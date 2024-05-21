@@ -19,6 +19,8 @@ This code is for python3 and uses:
 - ecdsa
 - requests
 
+It is tested on Python `3.9`, `3.10`, `3.11` and `3.12`.
+
 ## Installation
 
 You don't need to download the git version of the code as ``pyc3l`` is

@@ -22,7 +22,10 @@ dependencies = [
   "eth_account==0.5.9",
   "requests",
   "minimock [test]",
+  "hatch [test]",
+  "setuptools ; python_version >= '3.12'"
 ]
+
 [project.urls]
 "Homepage" = "https://github.com/com-chain/pyc3l"
 "Bug Tracker" = "https://github.com/com-chain/pyc3l/issues"
@@ -45,7 +48,7 @@ cov = "pytest --cov-report=term-missing --cov-config=pyproject.toml --cov=pyc3l 
 no-cov = "cov --no-cov {args}"
 
 [[tool.hatch.envs.test.matrix]]
-python = ["37", "38", "39", "310", "311"]
+python = ["39", "310", "311", "312"]
 
 [tool.coverage.run]
 branch = true

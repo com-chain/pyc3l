@@ -1,0 +1,49 @@
+language: python
+python:
+  - "3.9"
+  - "3.10"
+  - "3.11"
+  - "3.12"
+install:
+  - "[ -e requirements.txt ] && pip install -r requirements.txt"
+  - pip install .[test]
+script:
+  - PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 hatch run test
+
+## Ignored by Travis, but used internally to check packaging
+dist_check:
+  tests:
+  - label: install
+    matrix:
+      'yes':
+        - label: venv
+          matrix:
+            'on': |
+              pip install virtualenv
+              virtualenv /tmp/virtualenv
+              . /tmp/virtualenv/bin/activate
+            'off': |
+              true
+        - label: pkg
+          matrix:
+            docker: |
+              ## Using the versions of python docker images
+              true
+            latest: |
+              ## Using the last version of pip and setuptools
+              pip install pip --upgrade
+        - label: method
+          matrix:
+            setup: python setup.py install
+            pip+git: pip install "git+file://$PWD"
+            dist:
+              dist_files:
+                pip install "$DIST_FILE"
+        - |
+          pip show -f pyc3l
+          pip list
+
+  - |
+    python -c 'import pyc3l'
+  - |
+    pip uninstall -y pyc3l
