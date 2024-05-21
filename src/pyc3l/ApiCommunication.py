@@ -302,17 +302,6 @@ class ApiCommunication:
     def getAccountHasEnoughGas(self, address, min_gas=5000000):
         return int(self._pyc3l.getTrInfos(address)["balance"]) > min_gas
 
-    def getAccountTransactions(self, address, count=10, offset=0):
-        transactions = self.endpoint.transactions.get(params={
-            "addr": f"0x{address}",
-            "count": count,
-            "offset": offset,
-        })
-        ## XXXvlab: seems to need to be parsed twice (confirmed upon
-        ## reading the code of the comchain API).
-        import json
-        return [json.loads(r) for r in transactions]
-
     ############################### High level Transactions
     def transferNant(self, account, dest_address, amount, **kwargs):
         # message_from="", message_to=""):

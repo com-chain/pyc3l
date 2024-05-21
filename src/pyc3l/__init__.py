@@ -184,6 +184,17 @@ class Pyc3l:
     def getAccountEthBalance(self, address):
         return self.endpoint.api.post(data={"balance": address})['balance']
 
+    def getAccountTransactions(self, address, count=10, offset=0):
+        transactions = self.endpoint.transactions.get(params={
+            "addr": f"0x{address}",
+            "count": count,
+            "offset": offset,
+        })
+        ## XXXvlab: seems to need to be parsed twice (confirmed upon
+        ## reading the code of the comchain API).
+        import json
+        return [json.loads(r) for r in transactions]
+
     def hasChangedBlock(self, do_reset=False):
         new_current_block = self.getBlockNumber()
         res = new_current_block != self._current_block
@@ -315,6 +326,26 @@ class Pyc3l:
                 return name
 
         return Pyc3lCurrency(name, pyc3l_instance)
+
+    @property
+    def Account(pyc3l_instance):
+
+        class Pyc3lAccount(Account):
+
+            @property
+            def transactions(self):
+                batch_size = 15
+                offset = 0
+                while True:
+                    txs = pyc3l_instance.getAccountTransactions(self.address, count=batch_size, offset=offset)
+                    if not txs:
+                        break
+                    for tx in txs:
+                        yield pyc3l_instance.Transaction(tx["hash"], data=tx)
+                    offset += batch_size
+
+        return Pyc3lAccount
+
 
     @property
     def Wallet(pyc3l_instance):
