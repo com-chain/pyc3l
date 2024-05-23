@@ -108,8 +108,6 @@ class Pyc3l:
 
         self._endpoint_last_usage = None
 
-        self.contract_hex_to_currency = {}
-
         if endpoint:
             logger.info(f"endpoint: {endpoint} (fixed)")
             self._endpoint = Endpoint(endpoint)
@@ -142,6 +140,15 @@ class Pyc3l:
         if self._endpoint_resolver is not None:
             return self._endpoint_resolver.ipfs_endpoint
         return self._endpoint
+
+    @property
+    def contract_hex_to_currency(self):
+        if not hasattr(self, "_contract_hex_to_currency"):
+            res = self.ipfs_endpoint.config.get("list.json")
+            self._contract_hex_to_currency = {
+                k.lower(): self.Currency(v) for k, v in res.items()
+            }
+        return self._contract_hex_to_currency
 
     ## Blockchain information
 
@@ -410,16 +417,10 @@ class Pyc3l:
 
             @property
             def currency(self):
-                if "transaction" not in self.data:
+                if "transaction" not in self.data and self.data.get("currency") is not None:
                     return pyc3l_instance.Currency(self.data["currency"])
-                contract = self.bc_tx_data["to"]
-                if contract not in pyc3l_instance.contract_hex_to_currency:
-                    currency = self.data.get("currency")
-                    if currency is None:
-                        return None
-                    pyc3l_instance.contract_hex_to_currency[contract] = \
-                        pyc3l_instance.Currency(currency)
-                return pyc3l_instance.contract_hex_to_currency[contract]
+                contract = self.bc_tx_data["to"].lower()
+                return pyc3l_instance.contract_hex_to_currency.get(contract)
 
             @property
             def block(self):
@@ -507,10 +508,8 @@ class Pyc3l:
 
             @property
             def currency(self):
-                contract = self.data["to"]
-                if contract not in pyc3l_instance.contract_hex_to_currency:
-                    pyc3l_instance.contract_hex_to_currency[contract] = self.full_tx.currency
-                return pyc3l_instance.contract_hex_to_currency[contract]
+                contract = self.data["to"].lower()
+                return pyc3l_instance.contract_hex_to_currency.get(contract)
 
             @property
             def input_hex(self):
