@@ -145,9 +145,22 @@ class Pyc3l:
     def contract_hex_to_currency(self):
         if not hasattr(self, "_contract_hex_to_currency"):
             res = self.ipfs_endpoint.config.get("list.json")
-            self._contract_hex_to_currency = {
-                k.lower(): self.Currency(v) for k, v in res.items()
-            }
+            _contract_hex_to_currency = {}
+            for k, v in res.items():
+                currency = self.Currency(v)
+                for contract in currency.contracts:
+                    contract_key = contract.lower()
+                    if contract_key in _contract_hex_to_currency:
+                        previous_currency = _contract_hex_to_currency[contract_key]
+                        if previous_currency.symbol != currency.symbol:
+                            raise Exception(
+                                f"Two currencies ({currency.symbol}, {previous_currency.symbol}) "
+                                f"share the same contract address: {contract_key}"
+                            )
+                        else:
+                            continue
+                    _contract_hex_to_currency[contract_key] = currency
+            self._contract_hex_to_currency = _contract_hex_to_currency
         return self._contract_hex_to_currency
 
     ## Blockchain information
