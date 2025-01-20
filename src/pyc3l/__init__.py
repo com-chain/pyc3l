@@ -433,6 +433,9 @@ class Pyc3l:
                 if "transaction" not in self.data and self.data.get("currency") is not None:
                     return pyc3l_instance.Currency(self.data["currency"])
                 contract = self.bc_tx_data["to"].lower()
+                if contract not in pyc3l_instance.contract_hex_to_currency and \
+                   self.data.get("currency") is not None:
+                    return pyc3l_instance.Currency(self.data["currency"])
                 return pyc3l_instance.contract_hex_to_currency.get(contract)
 
             @property
