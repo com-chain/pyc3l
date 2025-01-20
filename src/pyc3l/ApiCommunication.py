@@ -355,7 +355,7 @@ class ApiCommunication:
             )
 
         # Prepare data
-        amount_cent = int(100 * amount)
+        amount_cent = round(100 * amount)
         data = encodeAddressForTransaction(dest_address)
         data += encodeNumber(amount_cent)
 
@@ -438,7 +438,7 @@ class ApiCommunication:
             )
 
         # Prepare data
-        amount_cent = int(100 * amount)
+        amount_cent = round(100 * amount)
         data = encodeAddressForTransaction(dest_address)
         data += encodeNumber(amount_cent)
 
@@ -503,8 +503,8 @@ class ApiCommunication:
         data += (
             encodeNumber(status)
             + encodeNumber(acc_type)
-            + encodeNumber(int(lim_p * 100))
-            + encodeNumber(int(lim_m * 100))
+            + encodeNumber(round(lim_p * 100))
+            + encodeNumber(round(lim_m * 100))
         )
 
         # send the transaction
@@ -549,7 +549,7 @@ class ApiCommunication:
             ciphered_message_to = ""
 
         # Prepare data
-        amount_cent = int(100 * amount)
+        amount_cent = round(100 * amount)
         data = encodeAddressForTransaction(address)
         data += encodeNumber(amount_cent)
 
@@ -578,7 +578,7 @@ class ApiCommunication:
         """
 
         # Prepare data
-        amount_cent = int(100 * amount)
+        amount_cent = round(100 * amount)
         data = encodeAddressForTransaction(address)
         data += encodeNumber(amount_cent)
 
@@ -611,7 +611,7 @@ class ApiCommunication:
         # Prepare data
         data = encodeAddressForTransaction(address_from)
         data += encodeAddressForTransaction(address_to)
-        data += encodeNumber(int(100 * amount))
+        data += encodeNumber(round(100 * amount))
 
         # prepare messages
         if "message_from" in kwargs and kwargs["message_from"] != "":
