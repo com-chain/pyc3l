@@ -56,7 +56,8 @@ pip install git+https://github.com/com-chain/pyc3l@master
 from pyc3l import Pyc3l
 
 ## Instantiate our interface to Comchain's node
-pyc3l = Pyc3l()
+#pyc3l = Pyc3l()
+pyc3l = Pyc3l(block_number="pending")  ## default
 
 ## load your ciphered wallet
 wallet = pyc3l.Wallet.from_json(json_string_wallet)
