@@ -101,10 +101,11 @@ class Block(AddressableBridgeObject): pass
 
 class Pyc3l:
 
-    def __init__(self, endpoint=None):
+    def __init__(self, endpoint=None, block_number=None):
         self._additional_nonce = 0
 
         self._current_block = 0
+        self._target_block = block_number or "pending"
 
         self._endpoint_last_usage = None
 
@@ -227,19 +228,20 @@ class Pyc3l:
 
     def read(self, fn, args, abi_return_type="int256"):
         data = {
-            "ethCall": {
+            "ethCallAt": {
                 "to": fn[0],  ## contract
                 "data": fn[1] + "".join(
                     (v[2:] if v.startswith("0x") else v).zfill(64)
                     for v in args
                 )
-            }
+            },
+            "blockNb": self._target_block
         }
         try:
             result = self.endpoint.api.post(data=data)
         except Exception as e:
             logger.error(
-                "Unexpected failure of ethCall " +
+                "Unexpected failure of ethCallAt " +
                 f"contract: 0x{fn[0]}, fn: 0x{fn[1]}, args: {args!r}"
             )
             raise e
