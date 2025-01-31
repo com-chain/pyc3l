@@ -1,4 +1,5 @@
 import logging
+import inspect
 import re
 from typing import NewType
 
@@ -9,7 +10,15 @@ from .CryptoAsim import EncryptMessage, DecryptMessage
 logger = logging.getLogger(__name__)
 
 
-Address = NewType('Address', str)
+class AddressMeta(type):
+    _pattern = re.compile(r"^(0x)?[a-fA-F0-9]{40}$")
+
+    def __instancecheck__(cls, instance):
+        return isinstance(instance, str) and cls._pattern.fullmatch(instance) is not None
+
+class Address(str, metaclass=AddressMeta):
+    pass
+
 Uint256 = NewType('Uint256', int)
 Amount = NewType('Amount', Uint256)
 Bool = NewType('Bool', Uint256)
@@ -181,9 +190,21 @@ class Contract:
 
             return get_list_function
 
+        fn = getattr(self._abi, key)
 
-        def _method(address):
-            value = self._pyc3l.read(parsed_fn_hexs[0], [address])
+        def _method(*args):
+            ## check args follow argspec from fn
+            sig = inspect.getfullargspec(fn)
+            if len(args) != len(sig.args):
+                raise TypeError(
+                    f"{key}() missing {len(sig.args) - 1 - len(args)} required positional arguments"
+                )
+            for arg, sig_arg in zip(args, sig.args):
+                if not isinstance(arg, sig.annotations[sig_arg]):
+                    raise TypeError(
+                        f"{key}() argument must be of type {sig.annotations[sig_arg]}"
+                    )
+            value = self._pyc3l.read(parsed_fn_hexs[0], args)
             return self.CONVERSIONS[return_type](value)
         return _method
 
