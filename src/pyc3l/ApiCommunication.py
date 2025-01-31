@@ -74,6 +74,8 @@ class ABI(metaclass=MetaABI):
 
 class ComChainABI(ABI):
 
+    def amountPledged() -> Amount: "18160ddd"
+
     def accountType(account: Address) -> Uint256: "ba99af70"
     def accountIsActive(account: Address) -> Bool: "61242bdd"
     def accountIsOwner(account: Address) -> Bool: "2f54bf6e"
