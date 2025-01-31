@@ -102,6 +102,8 @@ currency = Currency("Lemanopolis")
 ## or from wallet:
 currency = wallet.currency
 
+currency.getAmountPledged()  ## total pledged amount
+
 ```
 
 Please note that ``pyc3l-cli`` package has a lot of short and simple
