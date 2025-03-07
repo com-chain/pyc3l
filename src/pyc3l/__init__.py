@@ -202,6 +202,9 @@ class Pyc3l:
     def getTrInfos(self, address):
         return self.endpoint.api.post(data={"txdata": address})
 
+    def getTxPool(self):
+        return self.endpoint.pool.get()
+
     def getAccountEthBalance(self, address):
         return self.endpoint.api.post(data={"balance": address})['balance']
 
