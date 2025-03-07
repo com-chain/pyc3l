@@ -139,6 +139,7 @@ class Endpoint(BaseEndpoint):
 
     URLS = {
         "api": "/api.php",
+        "pool": "/pool.php",
         "config": "/ipns/QmaAAZor2uLKnrzGCwyXTSwogJqmPjJgvpYgpmtz5XcSmR/configs/",
         "endpoint_list": "/ipns/QmcRWARTpuEf9E87cdA4FfjBkv7rKTJyfvsLFTzXsGATbL",
         "keys": "/keys.php",
