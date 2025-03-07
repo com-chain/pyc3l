@@ -111,7 +111,7 @@ class Pyc3l:
 
         if endpoint:
             logger.info(f"endpoint: {endpoint} (fixed)")
-            self._endpoint = Endpoint(endpoint)
+            self._endpoint = Endpoint(endpoint) if isinstance(endpoint, str) else endpoint
             self._endpoint_resolver = None
         else:
             self._endpoint = None
