@@ -521,7 +521,10 @@ class Pyc3l:
 
             @property
             def currency(self):
-                contract = self.data["to"].lower()
+                contract = self.data["to"]
+                if contract is None:
+                    return None
+                contract = contract.lower()
                 return pyc3l_instance.contract_hex_to_currency.get(contract)
 
             @property
