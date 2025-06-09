@@ -515,7 +515,7 @@ class Pyc3l:
                 return self.data
 
             @property
-            def block(self):
+            def block_nb(self):
                 return self.data["blockNumber"]
 
             @property
@@ -573,7 +573,12 @@ class Pyc3l:
 
             @property
             def block(self):
-                return pyc3l_instance.getBlockByHash(self.data["blockHash"])
+                if self.data["blockHash"] is None:
+                    return None
+                return pyc3l_instance.Block(
+                    self.data["blockHash"],
+                    pyc3l_instance.getBlockByHash(self.data["blockHash"])
+                )
 
             @property
             def abi_fn(self):
@@ -607,7 +612,7 @@ class Pyc3l:
 
         return Pyc3lBCTransaction(*args, **kwargs)
 
-    def Block(pyc3l_instance, address):
+    def Block(pyc3l_instance, address, *args, **kwargs):
 
         class Pyc3lBlock(Block):
 
@@ -616,6 +621,10 @@ class Pyc3l:
                 if not hasattr(self, "_data"):
                     self._data = pyc3l_instance.getBlockInfo(self.address)
                 return self._data
+
+            @property
+            def hash(self):
+                return self.address
 
             @property
             def number(self):
@@ -653,7 +662,7 @@ class Pyc3l:
                     pyc3l_instance.BCTransaction(tx["hash"], data=tx) for tx in self.data['transactions']
                 ]
 
-        return Pyc3lBlock(address)
+        return Pyc3lBlock(address, *args, **kwargs)
 
     def BlockByNumber(self, nb):
         block = self.Block(None)
