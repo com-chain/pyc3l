@@ -321,7 +321,7 @@ class Pyc3l:
 
             def Account(pyc3l_currency, address):
 
-                class Pyc3lCurrencyAccount(Account):
+                class Pyc3lCurrencyAccount(pyc3l_instance.Account):
 
                     def __getattr__(self, label):
                         label = label[0].upper() + label[1:]
@@ -339,6 +339,76 @@ class Pyc3l:
                             if method is not NONE:
                                 return method(self.address)
                         raise AttributeError(label)
+
+                    @property
+                    def nonce_hex(self):
+                        return pyc3l_instance.getTrInfos(self.address)["nonce"]
+
+                    @property
+                    def nonce_dec(self):
+                        return int(self.nonce_hex, 16)
+
+                    @property
+                    def currency(self):
+                        return pyc3l_currency
+
+                    @property
+                    def active(self):
+                        return self.isActive
+
+                    @property
+                    def owner(self):
+                        return self.isOwner
+
+                    @property
+                    def role(self):
+                        return [
+                            "personal",
+                            "business",
+                            "admin",
+                            "pledge admin",
+                            "property admin"
+                        ][self.type]
+
+                    @property
+                    def eth_balance_wei(self):
+                        return int(self.EthBalance)
+
+                    @property
+                    def eth_balance_gwei(self):
+                        return Web3.fromWei(self.eth_balance_wei, "gwei")
+
+                    @property
+                    def eth_balance(self):
+                        return Web3.fromWei(self.eth_balance_wei, "ether")
+
+                    @property
+                    def allowances(self):
+                        return self.Allowances
+
+                    @property
+                    def requests(self):
+                        return self.Requests
+
+                    @property
+                    def my_requests(self):
+                        return self.MyRequests
+
+                    @property
+                    def delegations(self):
+                        return self.Delegations
+
+                    @property
+                    def my_delegations(self):
+                        return self.MyDelegations
+
+                    @property
+                    def accepted_requests(self):
+                        return self.AcceptedRequests
+
+                    @property
+                    def rejected_requests(self):
+                        return self.RejectedRequests
 
                 return Pyc3lCurrencyAccount(address)
 

@@ -105,6 +105,30 @@ currency = wallet.currency
 
 currency.getAmountPledged()  ## total pledged amount
 
+
+## get account in a currency
+
+account = currency.Account("0x...")
+
+account.nonce_hex
+account.nonce_dec
+account.eth_balance
+account.eth_balance_gwei
+account.eth_balance_eth
+
+account.active
+account.owner
+account.role
+
+account.allowances         ## dict of {address: amount}
+account.requests           ## dict of {address: amount}
+account.my_requests        ## dict of {address: amount}
+account.delegations        ## dict of {address: amount}
+account.my_delegations     ## dict of {address: amount}
+account.accepted_requests  ## dict of {address: amount}
+account.rejected_requests  ## dict of {address: amount}
+
+
 ```
 
 Please note that ``pyc3l-cli`` package has a lot of short and simple
