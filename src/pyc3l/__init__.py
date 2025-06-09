@@ -350,6 +350,10 @@ class Pyc3l:
             def name(self):
                 return name
 
+            @property
+            def technicalAccounts(self):
+                return self.metadata["server"]["technicalAccounts"]
+
         return Pyc3lCurrency(name, pyc3l_instance)
 
     @property
