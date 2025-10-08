@@ -68,6 +68,8 @@ exclude_lines = [
 [tool.hatch.build.targets.sdist]
 exclude = [
   "/.dovis",
+  "/.github",
+  "/.travis.yml",
   "/.pkg",
   "/.github",
   "/doc",
