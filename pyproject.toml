@@ -21,6 +21,7 @@ dependencies = [
   "web3",
   "eth_account==0.5.9",
   "requests",
+  "kids.cache",
   "minimock [test]",
   "hatch [test]",
   "setuptools ; python_version >= '3.12'"
@@ -66,6 +67,9 @@ exclude_lines = [
 
 [tool.hatch.build.targets.sdist]
 exclude = [
+  "/.dovis",
+  "/.pkg",
   "/.github",
   "/doc",
+  "/Pipfile.lock"
 ]

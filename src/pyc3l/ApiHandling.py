@@ -13,6 +13,9 @@ import itertools
 
 from contextlib import closing
 
+
+from .pcache import pcache
+
 logger = logging.getLogger(__name__)
 
 
@@ -135,13 +138,24 @@ class BaseEndpoint(object):
         return r
 
 
+class TTLCacheBaseEndpoint(BaseEndpoint):
+    def __init__(self, url, ttl=60):
+        super(TTLCacheBaseEndpoint, self).__init__(url)
+        self._ttl = ttl
+
+    def __getattr__(self, label):
+        if label in ["get", "post"]:
+            return pcache(ttl=self._ttl)(super(TTLCacheBaseEndpoint, self).__getattr__(label))
+        return super(TTLCacheBaseEndpoint, self).__getattr__(label)
+
+
 class Endpoint(BaseEndpoint):
 
     URLS = {
         "api": "/api.php",
         "pool": "/pool.php",
-        "config": "/ipns/QmaAAZor2uLKnrzGCwyXTSwogJqmPjJgvpYgpmtz5XcSmR/configs/",
-        "endpoint_list": "/ipns/QmcRWARTpuEf9E87cdA4FfjBkv7rKTJyfvsLFTzXsGATbL",
+        "config": ("/ipns/QmaAAZor2uLKnrzGCwyXTSwogJqmPjJgvpYgpmtz5XcSmR/configs/", 3*60*60 ),   ## 3 hours
+        "endpoint_list": ("/ipns/QmcRWARTpuEf9E87cdA4FfjBkv7rKTJyfvsLFTzXsGATbL", 24*60*60 * 7), ## 7 days
         "keys": "/keys.php",
         "transactions": "/trnslist.php",
         "lost_transactions": "/lost_trn.php",
@@ -155,7 +169,12 @@ class Endpoint(BaseEndpoint):
         if label in ["get", "post"]:
             return super(Endpoint, self).__getattr__(label)
         if label in self.URLS.keys():
-            return BaseEndpoint(f"{self._url}{self.URLS[label]}")
+            if isinstance(self.URLS[label], tuple):
+                path, ttl = self.URLS[label]
+                return TTLCacheBaseEndpoint(f"{self._url}{path}", ttl)
+            else:
+                path = self.URLS[label]
+                return BaseEndpoint(f"{self._url}{path}")
         raise AttributeError()
 
     def __repr__(self):
